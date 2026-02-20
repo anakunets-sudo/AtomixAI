@@ -1,0 +1,109 @@
+<Project>
+  <!-- 1. Общие свойства для всех проектов (включая Python) -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Platforms>x64</Platforms>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026</Configurations>
+  </PropertyGroup>
+
+  <!-- 2. Логика только для C# проектов (.csproj) -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <!-- Извлекаем версию Revit -->
+    <RevitVersion Condition="$(Configuration.Contains('2019'))">2019</RevitVersion>
+    <RevitVersion Condition="$(Configuration.Contains('2025'))">2025</RevitVersion>
+    <RevitVersion Condition="$(Configuration.Contains('2026'))">2026</RevitVersion>
+
+    <!-- Логика TargetFramework -->
+    <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' &lt; '2025'">net48</TargetFramework>
+
+    <!-- Настройки UI и совместимости -->
+    <UseWPF>true</UseWPF>
+    <ImportWindowsDesktopTargets Condition="'$(TargetFramework)' == 'net8.0-windows'">true</ImportWindowsDesktopTargets>
+    <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
+    <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+
+    <!-- Глобальные константы C# -->
+    <DefineConstants Condition="'$(RevitVersion)' != ''">$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025'">$(DefineConstants);REVIT2025_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2026'">$(DefineConstants);REVIT2026_OR_GREATER</DefineConstants>
+  </PropertyGroup>
+
+  <!-- 3. Настройка путей сборки (только для Revit проектов) -->
+  <PropertyGroup Condition="'$(RevitVersion)' != ''">
+    <OutputPath>$(SolutionDir)bin\$(Configuration)\Revit$(RevitVersion)\$(MSBuildProjectName)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <!-- 4. Настройка отладки (F5) -->
+  <PropertyGroup Condition="$(Configuration.Contains('Debug')) AND '$(RevitVersion)' != ''">
+    <StartAction>Program</StartAction>
+    <StartProgram>C:\Program Files\Autodesk\Revit $(RevitVersion)\Revit.exe</StartProgram>
+  </PropertyGroup>
+
+  <!-- 5. Подключение SDK через NuGet -->
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(RevitVersion)' != ''">
+    <PackageReference Include="Autodesk.Revit.Sdk.Refs.$(RevitVersion)" Version="*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- 6. ТАРГЕТЫ (Kill, Clean, Deploy) -->
+  <Target Name="KillRevit" BeforeTargets="BeforeBuild" Condition="$(Configuration.Contains('Debug')) AND '$(RevitVersion)' != ''">
+    <Message Importance="high" Text="[AtomixAI] Looking for Revit $(RevitVersion) process to close..." />
+    <Exec Command="powershell -Command &quot;Get-Process Revit -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*Revit $(RevitVersion)*' } | Stop-Process -Force&quot;" IgnoreExitCode="true" />
+    <Exec Command="ping 127.0.0.1 -n 2 > nul" />
+  </Target>
+
+  <Target Name="CleanupRevitAddinFolder" BeforeTargets="BeforeBuild" AfterTargets="KillRevit" Condition="$(Configuration.Contains('Debug')) AND '$(RevitVersion)' != ''">
+    <Message Importance="high" Text="[AtomixAI] Cleaning up plugin folder for Revit $(RevitVersion)..." />
+    <RemoveDir Directories="$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\AtomixAI\" />
+  </Target>
+
+  <Target Name="DeployToRevit" AfterTargets="Build" Condition="$(Configuration.Contains('Debug')) AND '$(RevitVersion)' != ''">
+    <PropertyGroup>
+      <PluginInstallDir>$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\AtomixAI\</PluginInstallDir>
+      <ManifestInstallDir>$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\</ManifestInstallDir>
+      <ManifestSource>$(SolutionDir)assets\Addins\AtomixAI.$(RevitVersion).addin</ManifestSource>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AllOutputFiles Include="$(OutputPath)**\*.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(AllOutputFiles)" DestinationFolder="$(PluginInstallDir)%(RecursiveDir)" SkipUnchangedFiles="true" OverwriteReadOnlyFiles="true" Retries="3" RetryDelayMilliseconds="500" />
+    <Copy SourceFiles="$(ManifestSource)" DestinationFolder="$(ManifestInstallDir)" Condition="Exists('$(ManifestSource)')" SkipUnchangedFiles="true" />
+
+    <Message Importance="high" Text="[AtomixAI] $(MSBuildProjectName) (Revit $(RevitVersion)) -> DEPLOYED SUCCESSFULLY" />
+  </Target>
+
+  <!-- Авто-генерация профилей запуска для Visual Studio 2022+ -->
+  <Target Name="GenerateLaunchSettings" BeforeTargets="BeforeBuild" Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(RevitVersion)' != ''">
+    <PropertyGroup>
+      <LaunchSettingsDir>$(ProjectDir)Properties\</LaunchSettingsDir>
+      <LaunchSettingsFile>$(LaunchSettingsDir)launchSettings.json</LaunchSettingsFile>
+      <!-- Формируем JSON контент профиля -->
+      <LaunchSettingsContent>
+        {
+        "profiles": {
+        "Revit $(RevitVersion)": {
+        "commandName": "Executable",
+        "executablePath": "C:\\Program Files\\Autodesk\\Revit $(RevitVersion)\\Revit.exe",
+        "workingDirectory": "C:\\Program Files\\Autodesk\\Revit $(RevitVersion)\\"
+        }
+        }
+        }
+      </LaunchSettingsContent>
+    </PropertyGroup>
+
+    <!-- Создаем папку Properties, если её нет -->
+    <MakeDir Directories="$(LaunchSettingsDir)" Condition="!Exists('$(LaunchSettingsDir)')" />
+
+    <!-- Записываем файл только если его нет или версия изменилась (чтобы не спамить перезагрузкой проекта) -->
+    <WriteLinesToFile File="$(LaunchSettingsFile)"
+                      Lines="$(LaunchSettingsContent)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+  </Target>
+</Project>

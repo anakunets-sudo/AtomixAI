@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Это критически важная строка для совместимости 2019 и 2025 -->
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <Platforms>x64</Platforms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Включаем поддержку Windows (WPF/WinForms) для интерфейсов -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
+    <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
+
+    <IncludePackageReferencesDuringMarkupCompilation>false</IncludePackageReferencesDuringMarkupCompilation>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <RootNamespace>AtomixAI.Main</RootNamespace>
+    
+  </PropertyGroup>  
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <!-- Для старых версий (Revit 2019-2024) явно указываем ссылки, если UseWPF не подтянул их -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AtomixAI.Bridge\AtomixAI.Bridge.csproj" />
+    <ProjectReference Include="..\AtomixAI.Core\AtomixAI.Core.csproj" />
+  </ItemGroup>
+  
+</Project>

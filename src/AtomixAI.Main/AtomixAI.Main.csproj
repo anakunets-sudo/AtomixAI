@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!-- КРИТИЧНО: Ставим TRUE, чтобы файлы net48 и net8.0 лежали в разных папках и не перемешивались -->
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+
+    <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
+    <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
+    <RootNamespace>AtomixAI.Main</RootNamespace>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2025</Configurations>
+  </PropertyGroup>
+
+  <!-- Общие зависимости -->
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <!-- Специфичные зависимости для Revit 2025/2026 (.NET 8) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <!-- Здесь можно добавить ссылку на Revit API 2025/2026 через NuGet -->
+  </ItemGroup>
+
+  <!-- Специфичные зависимости для Revit 2019 (.NET 4.8) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <!-- Используем стабильную версию для старого .NET -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Configuration" />
+    <!-- Здесь можно добавить ссылку на Revit API 2019 через NuGet -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AtomixAI.Bridge\AtomixAI.Bridge.csproj" />
+    <ProjectReference Include="..\AtomixAI.Core\AtomixAI.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Копирование контента -->
+  <ItemGroup>
+    <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="PythonRuntime\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>PythonRuntime\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+    <Content Include="Orchestrator\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Orchestrator\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+  </ItemGroup>
+
+</Project>

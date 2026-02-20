@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AtomixAI Terminal</title>
+    <style>
+        :root { 
+            --bg: #ffffff; --panel: #f3f3f3; --text: #333333; 
+            --accent: #0078d4; --danger: #d13438; --ai-msg: #f0f0f0; 
+            --user-msg: #0078d4; --border: #e0e0e0; --input-bg: #ffffff;
+            --scroll-thumb: #cccccc;
+        }
+        [data-theme='dark'] { 
+            --bg: #1e1e1e; --panel: #2d2d2d; --text: #e0e0e0; 
+            --accent: #00a2ff; --ai-msg: #3d3d3d; --user-msg: #00a2ff;
+            --border: #444444; --input-bg: #1e1e1e; --scroll-thumb: #555555;
+        }
+
+        body { 
+            margin: 0; font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); color: var(--text); 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* --- ШАПКА --- */
+        .header { 
+            padding: 10px 15px; background: var(--panel); 
+            display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 1px solid var(--border);
+        }
+        .version-tag { font-size: 11px; font-weight: bold; color: #888; letter-spacing: 0.5px; }
+
+        /* --- ЧАТ --- */
+        #chat { 
+            flex: 1; overflow-y: auto; padding: 15px; 
+            display: flex; flex-direction: column; gap: 12px; 
+            scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent;
+        }
+        #chat::-webkit-scrollbar { width: 5px; }
+        #chat::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 10px; }
+
+        .msg { 
+            padding: 10px 14px; border-radius: 12px; max-width: 85%; 
+            font-size: 13.5px; word-wrap: break-word; line-height: 1.4;
+        }
+        .user { align-self: flex-end; background: var(--user-msg); color: white; border-bottom-right-radius: 2px; }
+        .ai { align-self: flex-start; background: var(--ai-msg); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+        
+        /* Анимация "Думаю" */
+        .thinking-state { font-style: italic; opacity: 0.8; }
+        .thinking-content { display: flex; align-items: center; justify-content: space-between; min-width: 160px; }
+        
+        .cancel-inline-btn {
+            color: var(--danger); font-size: 10px; cursor: pointer; 
+            border: 1px solid var(--danger); padding: 2px 6px; 
+            border-radius: 4px; font-style: normal; font-weight: bold;
+            transition: 0.2s; opacity: 0.7;
+        }
+        .cancel-inline-btn:hover { opacity: 1; background: var(--danger); color: white; }
+
+        .rating { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+        .rate-btn { cursor: pointer; opacity: 0.5; font-size: 14px; transition: 0.2s; }
+        .rate-btn:hover { opacity: 1; color: var(--accent); }
+
+        /* --- ЗОНА ВВОДА --- */
+        .input-area { padding: 16px; background: var(--bg); border-top: 1px solid var(--border); position: relative; }
+        
+        .ctr-userInput {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 12px 12px 40px 12px;
+            transition: border-color 0.2s;
+        }
+        .ctr-userInput:focus-within { border-color: var(--accent); }
+
+        textarea {
+            width: 100%; background: none; border: none; color: var(--text);
+            resize: none; font-family: inherit; font-size: 14px; outline: none;
+            max-height: 150px; line-height: 1.5;
+        }
+
+        .icon-btn { 
+            position: absolute; bottom: 21px; background: none; border: none; 
+            cursor: pointer; width: 32px; height: 32px; display: flex; 
+            align-items: center; justify-content: center; border-radius: 8px; 
+            transition: 0.2s; color: var(--accent); font-family: 'Segoe MDL2 Assets'; font-size: 16px;
+        }
+        .icon-btn:hover { background: rgba(128,128,128,0.1); }
+        .icon-btn:disabled { opacity: 0.3; cursor: default; }
+
+        #micBtn { left: 22px; }
+        .send-btn { right: 22px; transform: scaleX(-1); }
+        .send-btn.stop-active { transform: none; color: var(--danger); }
+
+        /* --- ФУТЕР --- */
+        .footer {
+            padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888;
+        }
+        .status-group { display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; transition: 0.3s; }
+        .status-dot.online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+
+        .theme-switch-wrapper { display: flex; align-items: center; gap: 8px; }
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc; transition: .4s; border-radius: 18px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+            background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(16px); }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <span class="version-tag">ATOMIX AI v1.1</span>
+    <div id="header-status" style="font-size: 10px; color: var(--accent); font-weight: bold; display: none;">ВЫПОЛНЕНИЕ...</div>
+</div>
+
+<div id="chat">
+    <div class="msg ai">Система AtomixAI готова. Жду ваших команд.</div>
+</div>
+
+<div class="input-area">
+    <button id="micBtn" class="icon-btn" onclick="toggleVoice()" title="Голосовой ввод">
+        <span></span>
+    </button>
+    <div class="ctr-userInput">
+        <textarea rows="1" id="userInput" placeholder="Спросите о чем-нибудь..."></textarea>
+        <button id="sendBtn" class="icon-btn send-btn" onclick="sendMessage()" title="Отправить">
+            <span style="font-size: 18px;"></span>
+        </button>
+    </div>
+</div>
+
+<div class="footer">
+    <div class="status-group">
+        <span class="status-dot online"></span>
+        <span class="status-text">AI model: qwen2.5:7b</span>
+    </div>
+    <div class="theme-switch-wrapper">
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" onclick="toggleTheme()">
+            <span class="slider"></span>
+        </label>
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+    </div>
+</div>
+
+<script>
+    const chatContainer = document.getElementById('chat');
+    const inputField = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const themeToggle = document.getElementById('themeToggle');
+    const headerStatus = document.getElementById('header-status');
+    
+    let isWorking = false;
+    let thinkingMsgId = null;
+
+    function sendAction(action, data) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage({ action, ...data });
+        }
+        console.log("Action sent:", action, data);
+    }
+
+    window.chrome.webview?.addEventListener('message', event => {
+        const data = event.data;
+        if (data.action === 'ui_log') handleAIResponse(data);
+        if (data.type === 'system_status') updateSystemStatus(data);
+    });
+
+    function sendMessage() {
+        const text = inputField.value.trim();
+        if (!text || isWorking) return;
+
+        setWorkingState(true);
+        appendMessage('user', text);
+        
+        // Создаем бабл ожидания с кнопкой отмены
+        thinkingMsgId = appendThinkingMessage();
+        sendAction('chat_request', { prompt: text });
+        
+        inputField.value = '';
+        inputField.style.height = 'auto';
+    }
+
+    function cancelOperation() {
+        sendAction('stop', { reason: 'user_interrupt' });
+        if (thinkingMsgId) {
+            const el = document.getElementById(thinkingMsgId);
+            if (el) el.innerHTML = '<span style="opacity: 0.5;">🚫 Операция прервана</span>';
+        }
+        setWorkingState(false);
+    }
+
+    function setWorkingState(working) {
+        isWorking = working;
+        inputField.disabled = working;
+        headerStatus.style.display = working ? 'block' : 'none';
+        
+        const icon = sendBtn.querySelector('span');
+        if (working) {
+            sendBtn.classList.add('stop-active');
+            sendBtn.onclick = cancelOperation;
+            icon.innerText = ""; // Square/Stop icon
+            sendBtn.title = "Остановить";
+        } else {
+            sendBtn.classList.remove('stop-active');
+            sendBtn.onclick = sendMessage;
+            icon.innerText = ""; // Send icon
+            sendBtn.title = "Отправить";
+        }
+    }
+
+    function appendThinkingMessage() {
+        const id = 'msg-' + Math.random().toString(36).substr(2, 9);
+        const msgDiv = document.createElement('div');
+        msgDiv.id = id;
+        msgDiv.className = 'msg ai thinking-state';
+        msgDiv.innerHTML = `
+            <div class="thinking-content">
+                <span>Думаю...</span>
+                <span class="cancel-inline-btn" onclick="cancelOperation()">✕ ОТМЕНА</span>
+            </div>
+        `;
+        chatContainer.appendChild(msgDiv);
+        scrollToBottom();
+        return id;
+    }
+
+    function handleAIResponse(data) {
+        setWorkingState(false);
+        if (thinkingMsgId) {
+            const msgEl = document.getElementById(thinkingMsgId);
+            if (msgEl) {
+                msgEl.innerText = data.content;
+                msgEl.classList.remove('thinking-state'); 
+                addRating(msgEl);
+            }
+            thinkingMsgId = null;
+        } else {
+            appendMessage('ai', data.content, true);
+        }
+    }
+
+    function appendMessage(role, text, withRating = false) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `msg ${role}`;
+        msgDiv.innerText = text;
+        if (withRating) addRating(msgDiv);
+        chatContainer.appendChild(msgDiv);
+        scrollToBottom();
+    }
+
+    function addRating(el) {
+        const div = document.createElement('div');
+        div.className = 'rating';
+        div.innerHTML = '<span class="rate-btn">👍</span><span class="rate-btn">👎</span>';
+        el.appendChild(div);
+    }
+
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function toggleTheme() {
+        const theme = themeToggle.checked ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        sendAction('theme_manual', { theme });
+    }
+
+    inputField.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    inputField.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px';
+    });
+</script>
+</body>
+</html>

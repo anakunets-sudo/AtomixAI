@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>AtomixAI (R2019)</Name>
+    <!-- Путь относительно ProgramData/Autodesk/Revit/Addins/2019 -->
+    <Assembly>AtomixAI\AtomixAI.Main.dll</Assembly>
+    <FullClassName>AtomixAI.Main.App</FullClassName>
+    <ClientId>B2E1A4F0-7CDE-4C5A-9D2E-1A2B3C4D5E6F</ClientId>
+    <VendorId>ATOMIX</VendorId>
+    <VendorDescription>AtomixAI, AI Integration for Revit</VendorDescription>
+  </AddIn>
+</RevitAddIns>

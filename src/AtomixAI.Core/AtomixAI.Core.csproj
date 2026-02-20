@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Platforms>x64</Platforms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    
+    <!-- Для работы с Revit UI элементами, если понадобятся -->
+    <UseWPF>false</UseWPF>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2025</Configurations>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Глобальные зависимости для SDK, если нужны (например, JSON.NET) -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,483 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AtomixAI Terminal</title>
+    <style>
+        :root { 
+            --bg: #ffffff; --panel: #f3f3f3; --text: #333333; --nav-text: #444; --nav-bg: #f3f3f3;
+            --accent: #0078d4; --danger: #d13438; --ai-msg: #f0f0f0; 
+            --user-msg: #dadada; --user-text: #333; --border: #e0e0e0; --input-bg: #ffffff;
+            --scroll-thumb: #cccccc;
+        }
+        [data-theme='dark'] { 
+            --bg: #3b4453; --panel: #222933; --text: #f5f5eb;  --nav-text: #f5f5eb; --nav-bg: #1a1f25;
+            --accent: #00a2ff; --ai-msg:#2c3440 ; --user-msg: #222933; --user-text: #e0e0e0;
+            --border: #485363; --input-bg: #222933; --scroll-thumb: #555555;
+        }
+
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Кастомная подсказка */
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+        /* Финальный стиль подсказки */
+        #custom-tooltip {
+            position: fixed;
+            z-index: 9999;
+            padding: 5px 10px;
+            background: var(--panel);
+            color: var(--text);
+            font-size: 11px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            pointer-events: none;
+            display: none;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        
+
+        /* --- ШАПКА --- */
+        .header { padding: 2px 12px; background: var(--nav-bg); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .version-tag { font-size: 12px; font-weight: bold;align-items: center; color: var(--nav-text);}
+        .brand{display: flex; align-items: center;}
+        .nav-tools {display: flex; gap: 2px; margin-left: 0; border-left: 1px solid var(--border); padding-left: 0px; color: var(--nav-text);}
+        .nav-btn {
+            border: none;
+            background: none;
+            color: var(--nav-text);
+            padding: 2px 6px;
+            cursor: pointer;
+            border-right: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        /* --- ЧАТ --- */
+        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+        .msg { padding: 10px 14px; border-radius: 12px; max-width: 85%; font-size: 13.5px; word-wrap: break-word; }
+        .user { align-self: flex-end; background: var(--user-msg); color: var(--user-text); border-bottom-right-radius: 2px; }
+        .ai { align-self: flex-start; background: var(--ai-msg); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+        
+        .thinking-state { font-style: italic; opacity: 1; }
+        .cancel-btn-link { color: var(--accent); cursor: pointer; margin-left: 10px; text-decoration: none; }        
+        .rating { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+        .rate-btn { cursor: pointer; opacity: 0.5; font-size: 14px; }
+        .rate-btn:hover { opacity: 1; color: var(--accent); }
+        
+
+        /* --- ЗОНА ВВОДА --- */
+        .input-area { padding: 16px; background: var(--bg); position: relative; }
+        .ctr-userInput { background: var(--input-bg); width: calc(100% - 16px); overflow: hidden; padding: 8px 8px 26px 8px; border: 1px solid var(--border); border-radius: 12px; transition: border-color 0.2s; }
+        .ctr-userInput:focus-within { border-color: var(--accent); }
+
+        textarea { width: 100%; background: none; border: none; color: var(--text); resize: none; font-family: inherit; font-size: 14px; outline: none; max-height: 80px; line-height: 1.5; text-overflow: ellipsis; }
+        textarea:disabled { opacity: 0.5; }
+        textarea::placeholder {color: var(--text); opacity:.8;}
+
+        /* Настройка скроллбара для WebKit (WebView2 в Revit) */
+        textarea::-webkit-scrollbar, #chat::-webkit-scrollbar {
+            width: 8px;               /* Ширина вертикального скролла */
+            height: 8px;              /* Высота горизонтального */
+        }
+        /* Дорожка (фон скроллбара) */
+        textarea::-webkit-scrollbar-track, #chat::-webkit-scrollbar-track {
+            background: transparent;  /* Делаем фон прозрачным, чтобы не резал глаз */
+        }
+        /* Ползунок (thumb) */
+        textarea::-webkit-scrollbar-thumb, #chat::-webkit-scrollbar-thumb {
+            background-color: var(--scroll-thumb); /* Используй свою переменную #555 */
+            border-radius: 10px;      /* Закругляем края */
+            border: 1px solid var(--bg); /* Отступ от краев за счет рамки в цвет фона */
+        }
+        /* Эффект при наведении */
+            textarea::-webkit-scrollbar-thumb:hover, #chat::-webkit-scrollbar-thumb:hover {
+                background-color: var(--accent); /* Подсвечиваем акцентом Atomix при наведении */
+        }
+
+        .icon-btn { position: absolute; bottom: 21px; background: none; border: none; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 10px; transition: 0.2s; color: var(--accent); font-family: 'Segoe MDL2 Assets'; font-size: 16px; }
+        .icon-btn:hover { background: rgba(128,128,128,0.1)!important; }
+        .icon-btn:disabled { opacity: 0.3; cursor: default; }
+
+        #micBtn { left: 20px; }
+        .send-btn { right: 18px; transform: scaleX(-1); }
+
+        /* Анимация пульсации для точек */
+        @keyframes dotPulse {
+            0%, 100% { transform: scale(0.8); opacity: 0.4; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .thinking-dots {
+            display: inline-flex;
+            gap: 3px;
+            margin-right: 8px;
+            align-items: center;
+        }
+
+        .thinking-dots span {
+            width: 4px;
+            height: 4px;
+            background-color: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+            animation: dotPulse 1.5s infinite ease-in-out;
+        }
+
+        /* Задержка для каждой точки, чтобы они двигались волной */
+        .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        .thinking-state {
+            display: flex;
+            align-items: center;
+            font-style: italic;
+            opacity: 0.8;
+            color: var(--nav-text);
+        }
+        /* Эквалайзер */
+        .listening-bars { display: inline-flex; gap: 3px; margin-right: 10px; align-items: center; height: 12px; }
+        .listening-bars span { 
+            width: 3px; height: 100%; background-color: var(--accent); border-radius: 4px; 
+            animation: barGrow 0.8s infinite ease-in-out; 
+        }
+        @keyframes barGrow { 0%, 100% { transform: scaleY(0.4); opacity: 0.6; } 50% { transform: scaleY(1.3); opacity: 1; } }
+        .listening-bars span:nth-child(2) { animation-delay: 0.2s; }
+        .listening-bars span:nth-child(3) { animation-delay: 0.4s; }
+
+        /* Точки */
+        .thinking-dots { display: inline-flex; gap: 3px; margin-right: 8px; align-items: center; }
+        .thinking-dots span { 
+            width: 4px; height: 4px; background-color: var(--accent); border-radius: 50%; 
+            animation: dotPulse 1.5s infinite ease-in-out; 
+        }
+        @keyframes dotPulse { 0%, 100% { transform: scale(0.8); opacity: 0.4; } 50% { transform: scale(1.2); opacity: 1; } }
+        .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+
+        /* --- ФУТЕР --- */
+        .footer { padding: 0 12px; background: var(--panel); border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888; }
+        .status-group { display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .status-dot.online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+        .model-link { cursor: pointer; opacity: 0.8; color: var(--accent);}
+        .model-link:hover { opacity: 1; color: var(--accent); }
+
+        .switch { position: relative; display: inline-block; width: 34px; height: 15px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 15px; }
+        .slider:before { position: absolute; content: ""; height: 9px; width: 9px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+
+        input:checked + .slider { background-color: #888; }
+        input:checked + .slider:before {background:#333; transform: translateX(19px); }
+        .theme-switch-wrapper { display: flex; align-items: center; gap: 8px; margin-bottom: 1px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div style="display: flex; align-items: center;">
+        <div class="nav-tools">
+            <button class="nav-btn" data-tooltip="AtomixBIM: Contextual intelligence. Revit execution."><span class="brand"></span><span class="version-tag">AtomixBIM Free</span></button>
+            <button class="nav-btn" data-tooltip="Your pyRevit Scripts Library">Python scripts<span style="font-family: 'Segoe MDL2 Assets'; font-size: 8px;">&nbsp;</span></button>
+            <button class="nav-btn" data-tooltip="Train & Tune AI Patterns">Pattern Lab</button>
+        </div>
+    </div>
+</div>
+
+<div id="chat">
+    <div class="msg ai">AtomixBIM is ready. Where shall we begin?</div>
+</div>
+
+<div class="input-area">
+    <button id="micBtn" class="icon-btn" aria-label="Voice" onclick="toggleVoice()" data-tooltip="Voice input">
+        <span id="micIcon"></span>
+    </button>
+    <div class="ctr-userInput">
+        <textarea rows="1" id="userInput" placeholder="Describe sequence... [Enter to send]"></textarea>
+        <button id="sendBtn" class="icon-btn send-btn" aria-label="Send" onclick="sendMessage()" data-tooltip="Send">
+            <span style="font-size: 16px; margin: 0 0 0 -3px; transform: scaleY(1.1);"></span>
+        </button>
+    </div>
+</div>
+
+<div class="footer">
+    <div>
+        <button data-tooltip="Expand environment settings" style="background: none; border: none; padding: 0px 20px; margin-left:-20px; cursor: pointer; height: 27px; overflow: hidden;">
+            <p style="font-family: 'Segoe MDL2 Assets'; font-size: 16px; color: #888; padding: 0px; margin-top: 8px;"></p>
+        </button>
+    </div>
+    <div class="status-group">
+        <span class="status-dot online"></span>
+        <span style="padding: 0 0 2px; color: var(--nav-text);">AI model: <span class="model-link status-text">qwen2.5:7b</span>
+    </div>    
+    <div class="theme-switch-wrapper">
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" onclick="toggleTheme()">
+            <span class="slider"></span>
+        </label>
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+    </div>
+</div>
+
+<script>
+    const chatContainer = document.getElementById('chat');
+    const inputField = document.getElementById('userInput');
+    const themeToggle = document.getElementById('themeToggle');
+    const micBtn = document.getElementById('micBtn');
+    
+    let isMicActive = false;
+    let statusMsgId = null; 
+    let thinkingMsgId = null; 
+    let isWorking = false;    
+
+    // --- 1. СВЯЗЬ С REVIT (C# AtomixAI.Bridge) ---
+    function sendAction(action, data) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage({ action, ...data });
+        }
+    }
+
+    // Слушатель событий от плагина
+    window.chrome.webview?.addEventListener('message', event => {
+        const data = event.data;
+        if (data.action === 'theme_changed') applyTheme(data.theme);
+        else if (data.type === 'voice_input') injectVoiceText(data.content);
+        else if (data.action === 'ui_log') handleAIResponse(data);
+        else if (data.type === 'system_status') updateStatus(data);
+    });
+
+    // --- 2. ЛОГИКА ЧАТА ---
+    function sendMessage() {
+        const text = inputField.value.trim();
+        if (!text || isWorking) return;
+
+        appendMessage('user', text);
+        
+        // Создаем ИИ-сообщение с точками и кнопкой ПРЕРВАТЬ
+        thinkingMsgId = appendThinkingMessage();
+        
+        setBusy(true); // Блокируем интерфейс, пока Revit думает
+        sendAction('chat_request', { prompt: text });
+        
+        inputField.value = '';
+        inputField.style.height = '42px';
+    }
+
+    function handleAIResponse(data) {
+        setBusy(false);
+        if (thinkingMsgId && data.role === 'ai') {
+            const msgEl = document.getElementById(thinkingMsgId);
+            if (msgEl) {
+                // Заменяем анимацию на текст ответа от AtomixAI
+                msgEl.innerText = data.content; 
+                msgEl.classList.remove('thinking-state'); 
+                addRating(msgEl);
+            }
+            thinkingMsgId = null;
+        } else {
+            appendMessage(data.role, data.content, data.role === 'ai');
+        }
+    }
+
+    // Анимация "Думаю..." с точками и отменой
+    function appendThinkingMessage() {
+        const id = 'msg-' + Math.random().toString(36).substr(2, 9);
+        const msgDiv = document.createElement('div');
+        msgDiv.id = id;
+        msgDiv.className = 'msg ai thinking-state';
+        msgDiv.innerHTML = `
+            <div class="thinking-dots"><span></span><span></span><span></span></div>
+            <span>Synthesizing logic...</span>
+            <a class="cancel-btn-link" onclick="cancelAction()">Cancel</a>
+        `;
+        chatContainer.appendChild(msgDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return id;
+    }
+
+    function cancelAction() {
+        sendAction('stop', {}); // Сигнал в Revit прервать транзакцию
+        if (thinkingMsgId) {
+            const el = document.getElementById(thinkingMsgId);
+            if (el) el.innerHTML = '<span style="opacity:1;">Cancelled by user</span>';
+        }
+        setBusy(false);
+    }
+
+    function setBusy(busy) {
+        isWorking = busy;
+        inputField.disabled = busy;
+        micBtn.disabled = busy;
+        const sendBtn = document.querySelector('.send-btn');
+        if (sendBtn) sendBtn.disabled = busy;
+    }
+
+    function appendMessage(role, text, withRating = false) {
+        const msgDiv = document.createElement('div');
+        const id = 'msg-' + Math.random().toString(36).substr(2, 9);
+        msgDiv.id = id;
+        msgDiv.className = `msg ${role}`;
+        msgDiv.innerText = text;
+        if (withRating) addRating(msgDiv);
+        chatContainer.appendChild(msgDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return id;
+    }
+
+    // --- 3. МИКРОФОН (ФИЗИЧЕСКИЙ КОННЕКТ + ЭКВАЛАЙЗЕР) ---
+    function toggleVoice() {
+        if (isWorking) return; 
+        
+        isMicActive = !isMicActive;
+        const micIcon = document.getElementById('micIcon');
+
+        if (isMicActive) {
+            // Стиль активной записи
+            micBtn.style.setProperty('background', 'var(--danger)', 'important');
+            micBtn.style.color = "#fff";
+            micIcon.innerText = "\uF12E"; // Segoe MDL2: Mic с волнами
+            
+            // Сообщение "Слушаю..." с прыгающими барами
+            const listenHtml = `
+                <div class="listening-bars"><span></span><span></span><span></span></div>
+                <span>Listening for commands...</span>
+            `;
+            const msgDiv = document.createElement('div');
+            statusMsgId = 'status-' + Math.random().toString(36).substr(2, 9);
+            msgDiv.id = statusMsgId;
+            msgDiv.className = 'msg ai listening-state';
+            msgDiv.innerHTML = listenHtml;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        } else {
+            // Возврат в режим ожидания
+            micBtn.style.background = "none";
+            micBtn.style.color = "var(--accent)";
+            micIcon.innerText = ""; // Стандартный микрофон
+            
+            if (statusMsgId) {
+                const el = document.getElementById(statusMsgId);
+                if (el) el.remove();
+                statusMsgId = null;
+            }
+        }
+        
+        // КРИТИЧЕСКИЙ ВЫЗОВ: Отправка сигнала в C# для активации аудио-потока
+        sendAction('toggle_voice', { active: isMicActive });
+    }
+
+    function injectVoiceText(text) {
+        // Вставка текста из распознанного голоса в поле ввода
+        inputField.value += (inputField.value ? " " : "") + text;
+        inputField.dispatchEvent(new Event('input')); // Обновляем высоту textarea
+    }
+
+    // --- 4. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+    function updateStatus(data) {
+        const modelLabel = document.querySelector('.status-text');
+        const dot = document.querySelector('.status-dot');
+        if(modelLabel) modelLabel.innerText = `AI model: ${data.model}`;
+        if(dot) data.status === 'online' ? dot.classList.add('online') : dot.classList.remove('online');
+    }
+
+    function addRating(el) {
+        const div = document.createElement('div');
+        div.className = 'rating';
+        div.innerHTML = `
+            <span class="rate-btn" onclick="this.parentElement.innerText='👍'">👍</span>
+            <span class="rate-btn" onclick="this.parentElement.innerText='👎'">👎</span>
+        `;
+        el.appendChild(div);
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (themeToggle) themeToggle.checked = (theme === 'dark');
+    }
+
+    function toggleTheme() {
+        const nextTheme = themeToggle.checked ? 'dark' : 'light';
+        applyTheme(nextTheme);
+        sendAction('theme_manual', { theme: nextTheme });
+    }
+
+    // Слушатели событий ввода
+    inputField.addEventListener('keydown', e => { 
+        if (e.key === 'Enter' && !e.shiftKey) { 
+            e.preventDefault(); 
+            sendMessage(); 
+        } 
+    });
+
+    inputField.addEventListener('input', function() { 
+        this.style.height = 'auto'; 
+        this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px'; 
+    });
+
+    // Инициализация при загрузке
+    window.addEventListener('DOMContentLoaded', () => {
+        const initialTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        applyTheme(initialTheme);
+    });
+
+    // --- SMART TOOLTIP ENGINE ---
+const tip = document.createElement('div');
+tip.id = 'custom-tooltip';
+document.body.appendChild(tip);
+
+let tooltipTimeout; // Переменная для хранения таймера
+
+document.addEventListener('mouseover', e => {
+    const target = e.target.closest('[data-tooltip]');
+    if (!target) return;
+
+    // 1. Сначала подготавливаем данные, но не показываем
+    const text = target.getAttribute('data-tooltip');
+    
+    // 2. Запускаем таймер
+    tooltipTimeout = setTimeout(() => {
+        tip.innerText = text;
+        tip.style.display = 'block';
+        
+        const rect = target.getBoundingClientRect();
+        
+        // --- Твой блок позиционирования (без изменений) ---
+        let left = rect.left + (rect.width / 2);
+        let top = rect.top - 35; 
+        if (rect.top < 50) top = rect.bottom + 10;
+        
+        const tipWidth = tip.offsetWidth;
+        if (left + (tipWidth / 2) > window.innerWidth - 10) {
+            left = window.innerWidth - (tipWidth / 2) - 10;
+        }
+        if (left - (tipWidth / 2) < 10) {
+            left = 10 + (tipWidth / 2);
+        }
+        // ------------------------------------------------
+
+        tip.style.left = `${left - (tipWidth / 2)}px`;
+        tip.style.top = `${top}px`;
+        tip.style.opacity = '1';
+    }, 700); // <-- Задержка в миллисекундах (0.7 сек)
+});
+
+document.addEventListener('mouseout', e => {
+    if (e.target.closest('[data-tooltip]')) {
+        // 3. ОБЯЗАТЕЛЬНО: Отменяем таймер, если пользователь убрал мышь быстрее, чем сработал Tooltip
+        clearTimeout(tooltipTimeout); 
+        
+        tip.style.opacity = '0';
+        tip.style.display = 'none';
+    }
+});
+</script>

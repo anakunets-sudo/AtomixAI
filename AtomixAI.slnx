@@ -1,0 +1,61 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug2019" />
+    <BuildType Name="Debug2025" />
+    <BuildType Name="Debug2026" />
+    <BuildType Name="Release2019" />
+    <BuildType Name="Release2026" />
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/assets/" />
+  <Folder Name="/assets/Addins/">
+    <File Path="AtomixAI.2019.addin" />
+    <File Path="AtomixAI.2026.addin" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
+  <Project Path="Atomix_AI_Orchestrator/Atomix_AI_Orchestrator.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="71768179-62c7-4582-9019-6721d9922c70">
+    <BuildType Solution="Debug2019|x64" Project="Debug" />
+    <BuildType Solution="Debug2026|*" Project="Debug" />
+    <BuildType Solution="Release2019|*" Project="Release" />
+    <BuildType Solution="Release2026|*" Project="Release" />
+    <Platform Project="AnyCPU" />
+    <Build Project="false" />
+  </Project>
+  <Project Path="src/AtomixAI.Atomic/AtomixAI.Atomic.csproj">
+    <BuildType Solution="Debug2026|Any CPU" Project="Release" />
+    <BuildType Solution="Release2019|Any CPU" Project="Release" />
+    <BuildType Solution="Release2026|Any CPU" Project="Release" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug2019|Any CPU" Project="x64" />
+    <Platform Solution="Debug2025|Any CPU" Project="x64" />
+    <Build Solution="Debug2026|Any CPU" Project="false" />
+  </Project>
+  <Project Path="src/AtomixAI.Bridge/AtomixAI.Bridge.csproj">
+    <BuildType Solution="Debug2026|Any CPU" Project="Debug" />
+    <BuildType Solution="Release2019|Any CPU" Project="Realease2019" />
+    <BuildType Solution="Release2026|Any CPU" Project="Release" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug2019|Any CPU" Project="x64" />
+    <Platform Solution="Debug2025|Any CPU" Project="x64" />
+    <Platform Solution="Release2019|Any CPU" Project="x64" />
+  </Project>
+  <Project Path="src/AtomixAI.Core/AtomixAI.Core.csproj">
+    <BuildType Solution="Debug2026|Any CPU" Project="Debug" />
+    <BuildType Solution="Release2019|Any CPU" Project="Debug" />
+    <BuildType Solution="Release2026|Any CPU" Project="Release" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug2019|Any CPU" Project="x64" />
+    <Platform Solution="Debug2025|Any CPU" Project="x64" />
+  </Project>
+  <Project Path="src/AtomixAI.Main/AtomixAI.Main.csproj">
+    <BuildType Solution="Debug2026|Any CPU" Project="Debug" />
+    <BuildType Solution="Release2019|Any CPU" Project="Debug" />
+    <BuildType Solution="Release2026|Any CPU" Project="Release" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="Debug2019|Any CPU" Project="x64" />
+    <Platform Solution="Debug2025|Any CPU" Project="x64" />
+  </Project>
+</Solution>

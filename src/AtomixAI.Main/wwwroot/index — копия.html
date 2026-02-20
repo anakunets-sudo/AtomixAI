@@ -1,0 +1,370 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AtomixAI Terminal</title>
+    <style>
+        :root { 
+            --bg: #ffffff; --panel: #f3f3f3; --text: #333333; 
+            --accent: #0078d4; --danger: #d13438; --ai-msg: #f0f0f0; 
+            --user-msg: #0078d4; --border: #e0e0e0; --input-bg: #ffffff;
+            --scroll-thumb: #cccccc;
+        }
+        [data-theme='dark'] { 
+            --bg: #1e1e1e; --panel: #2d2d2d; --text: #e0e0e0; 
+            --accent: #00a2ff; --ai-msg: #3d3d3d; --user-msg: #00a2ff;
+            --border: #444444; --input-bg: #1e1e1e; --scroll-thumb: #555555;
+        }
+
+        body { 
+            margin: 0; font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); color: var(--text); 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* --- ШАПКА --- */
+        .header { 
+            padding: 8px 12px; background: var(--panel); 
+            display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 1px solid var(--border);
+        }
+        .version-tag { font-size: 10px; font-weight: bold; color: #888; }
+        .stop-btn { 
+            background: var(--danger); color: white; border: none; 
+            padding: 4px 10px; cursor: pointer; border-radius: 4px; font-size: 11px;
+        }
+
+        /* --- ЧАТ --- */
+        #chat { 
+            flex: 1; overflow-y: auto; padding: 15px; 
+            display: flex; flex-direction: column; gap: 12px; 
+        }
+        .msg { 
+            padding: 10px 14px; border-radius: 12px; max-width: 85%; 
+            font-size: 13.5px; word-wrap: break-word;
+        }
+        .user { align-self: flex-end; background: var(--user-msg); color: white; border-bottom-right-radius: 2px; }
+        .ai { align-self: flex-start; background: var(--ai-msg); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+        
+        .thinking-state { 
+            font-style: italic; opacity: 0.7; 
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 0.8; } 100% { opacity: 0.5; } }
+
+        .rating { display: flex; gap: 8px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+        .rate-btn { cursor: pointer; opacity: 0.5; font-size: 14px; }
+        .rate-btn:hover { opacity: 1; color: var(--accent); }
+
+        /* --- ЗОНА ВВОДА (СТИЛЬНЫЙ ТЕРМИНАЛ) --- */
+        .input-area { 
+            padding: 16px; 
+            background: var(--bg); 
+            /*display: flex; */
+            position: relative;
+            align-items: flex-end; 
+            border-top: 1px solid var(--border);
+        }
+
+        textarea {
+            flex: 1;
+            background: var(--panel);
+            color: var(--text);
+            padding: 0px;
+            line-height: 1.5;
+            resize: none;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+            scrollbar-width: none;
+            border:none;
+            max-height: 50px;
+            }
+
+        textarea::-webkit-scrollbar {
+                display: none;
+        }
+
+        textarea::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ctr-userInput:focus { border-color: var(--accent); }
+
+        .ctr-userInput {
+            background: var(--panel);
+            width: calc(100% - 24px);
+            overflow: hidden;
+            padding: 12px 12px 40px 12px;            
+            margin: 0 0 0px 0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: border-color 0.2s;
+        }
+
+        .send-btn { 
+            right: 22px; 
+            /*background: var(--accent) !important;*/ 
+            color: var(--accent)!important;
+            font-size: 14px !important;
+            transform: scaleX(-1);
+        }
+
+        .icon-btn { 
+            position: absolute;
+            bottom: 21px; /* Центровка по первой строке */
+            background: none; border: none; cursor: pointer; 
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; transition: 0.2s;
+            color: var(--accent);
+            font-family: 'Segoe MDL2 Assets'; /* Системные иконки */
+            font-size: 16px;
+        }
+        .icon-btn:hover { background: rgba(128,128,128,0.1)!important; }
+
+        #micBtn { left: 22px; }        
+        
+        /*.send-btn:hover { transform: scaleX(-1.05); opacity: 0.9; }*/
+
+        /* --- ФУТЕР --- */
+        .footer {
+            padding: 6px 12px; background: var(--panel); 
+            border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; 
+            font-size: 11px; color: #888;
+        }
+        .status-group { display: flex; align-items: center; gap: 6px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .status-dot.online { background: #4caf50; box-shadow: 0 0 5px #4caf50; }
+
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc; transition: .4s; border-radius: 18px;
+        }
+        .slider::-webkit-slider-thumb {background: #ccc;}
+        .slider:before {
+            position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+            background-color: white; transition: .4s; border-radius: 50%; background: #ссс;
+        }
+        input:checked + .slider { background-color: #888; }
+        input:checked + .slider:before { background: #333; transform: translateX(16px); }
+        .theme-switch-wrapper { display: flex; align-items: center; gap: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="version-tag">ATOMIX AI v1.1</span>
+    </div>
+    <button class="stop-btn" onclick="sendAction('stop', {})">STOP</button>
+</div>
+
+<div id="chat">
+    <div class="msg ai">Система AtomixAI готова. Жду ваших команд.</div>
+</div>
+
+<div class="input-area">
+    <button id="micBtn" class="icon-btn" onclick="toggleVoice()" title="Голосовой ввод">
+        <span id="micIcon"></span>
+    </button>
+    <div class="ctr-userInput">
+        <div style="width=100%;">
+            <textarea rows="1" id="userInput" placeholder="Спросите о чем-нибудь..."></textarea>
+                <button class="icon-btn send-btn" onclick="sendMessage()" title="Отправить">
+                <span style="transform: translateX(-1px);scale: 1.3;"></span>
+            </button>
+        </div>
+    </div>
+</div>
+<div class="footer">
+    <div class="status-group">
+        <span class="status-dot online"></span>
+        <span class="status-text">AI model: qwen2.5:7b</span>
+    </div>
+    <div class="theme-switch-wrapper">
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;">&#xE706;</span>
+        <label class="switch">
+            <input type="checkbox" id="themeToggle" onclick="toggleTheme()">
+            <span class="slider round"></span>
+        </label>
+        <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;">&#xE708;</span>
+    </div>
+</div>
+
+<!-- Scripts (см. следующее сообщение) -->
+</body>
+</html>
+
+
+<script>
+    const chatContainer = document.getElementById('chat');
+    const inputField = document.getElementById('userInput');
+    const themeToggle = document.getElementById('themeToggle');
+    
+    let isMicActive = false;
+    let statusMsgId = null; 
+    let thinkingMsgId = null; 
+
+    // --- 1. СВЯЗЬ С REVIT (C#) ---
+    function sendAction(action, data) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage({ action, ...data });
+        }
+    }
+
+    window.chrome.webview.addEventListener('message', event => {
+        const data = event.data;
+
+        if (data.action === 'theme_changed') {
+            applyTheme(data.theme);
+        }
+        
+        // Входящий голос из VocalSync
+        else if (data.type === 'voice_input') {
+            injectVoiceText(data.content);
+        }
+        
+        // Ответы ИИ и замена "Думаю..."
+        else if (data.action === 'ui_log' && !data.type) {
+            if (thinkingMsgId && data.role === 'ai') {
+                const msgEl = document.getElementById(thinkingMsgId);
+                if (msgEl) {
+                    msgEl.innerText = data.content;
+                    msgEl.classList.remove('thinking-state'); 
+                    addRating(msgEl);
+                }
+                thinkingMsgId = null;
+            } else {
+                appendMessage(data.role, data.content, data.role === 'ai');
+            }
+        }
+        
+        // Статус модели
+        else if (data.type === 'system_status') {
+            const modelLabel = document.querySelector('.status-text');
+            const dot = document.querySelector('.status-dot');
+            if(modelLabel) modelLabel.innerText = `AI model: ${data.model}`;
+            if(dot) {
+                if (data.status === 'online') dot.classList.add('online');
+                else dot.classList.remove('online');
+            }
+        }
+    });
+
+    // --- 2. ЛОГИКА ЧАТА ---
+    function sendMessage() {
+        const text = inputField.value.trim();
+        if (!text) return;
+
+        appendMessage('user', text);
+        
+        // Эффект "Думаю..."
+        thinkingMsgId = appendMessage('ai', 'Думаю...');
+        const el = document.getElementById(thinkingMsgId);
+        if(el) el.classList.add('thinking-state');
+
+        sendAction('chat_request', { prompt: text });
+        
+        inputField.value = '';
+        inputField.style.height = '42px';
+    }
+
+    function appendMessage(role, text, withRating = false) {
+        const msgDiv = document.createElement('div');
+        const id = 'msg-' + Math.random().toString(36).substr(2, 9);
+        msgDiv.id = id;
+        msgDiv.className = `msg ${role}`;
+        msgDiv.innerText = text;
+
+        if (withRating && text !== 'Думаю...') {
+            addRating(msgDiv);
+        }
+
+        chatContainer.appendChild(msgDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return id;
+    }
+
+    function addRating(el) {
+        const ratingDiv = document.createElement('div');
+        ratingDiv.className = 'rating';
+        ratingDiv.innerHTML = `
+            <span class="rate-btn" onclick="this.parentElement.innerText='👍'">👍</span>
+            <span class="rate-btn" onclick="this.parentElement.innerText='👎'">👎</span>
+        `;
+        el.appendChild(ratingDiv);
+    }
+
+    // --- 3. ГОЛОС (SEGUE MDL2 ICONS) ---
+    function toggleVoice() {
+        isMicActive = !isMicActive;
+        const micBtn = document.getElementById('micBtn');
+        const micIcon = micBtn.querySelector('span');
+    
+        if (isMicActive) {
+            micBtn.style.background = "var(--danger)!important";
+            micBtn.style.color = "#fff";
+            micIcon.innerText = "\uF12E"; // Микрофон с волнами
+            
+            statusMsgId = appendMessage('ai', '* Слушаю вас... *');
+            const el = document.getElementById(statusMsgId);
+            if (el) el.classList.add('thinking-state');
+        } else {
+            micBtn.style.background = "none";
+            micBtn.style.color = "var(--accent)";
+            micIcon.innerText = ""; // Обычный микрофон
+            
+            if (statusMsgId) {
+                const el = document.getElementById(statusMsgId);
+                if (el) el.remove();
+                statusMsgId = null;
+            }
+        }
+        sendAction('toggle_voice', { active: isMicActive });
+    }
+
+    function injectVoiceText(text) {
+        inputField.value += (inputField.value ? " " : "") + text;
+        inputField.style.height = 'auto';
+        inputField.style.height = (inputField.scrollHeight) + 'px';
+    }
+
+    // --- 4. ТЕМЫ ---
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (themeToggle) themeToggle.checked = (theme === 'dark');
+        sendAction('theme_manual', { theme: theme });
+    }
+
+    function toggleTheme() {
+        const nextTheme = themeToggle.checked ? 'dark' : 'light';
+        applyTheme(nextTheme);
+    }
+
+    // --- EVENTS ---
+    inputField.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    inputField.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px';
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const initialTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        applyTheme(initialTheme);
+    });
+</script>
+
+</body>
+</html>
