@@ -7,6 +7,18 @@
     <Configurations>Debug2019;Release2019;Debug2026;Release2026</Configurations>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2026|x64'">
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2019|x64'">
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
   <!-- 2. Логика только для C# проектов (.csproj) -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
     <!-- Извлекаем версию Revit -->

@@ -1,9 +1,9 @@
-﻿using AtomixAI.Bridge;
-using AtomixAI.Core;
+﻿using AtomixAI.Core;
 using Autodesk.Revit.DB;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -21,44 +21,50 @@ namespace AtomixAI.Atomic.Commands
     {
         public string CommandId => this.GetType().GetCustomAttribute<Core.AtomicInfoAttribute>()?.Name;
 
-        [AtomicParam("Список фильтров. Пример: [{'Kind':'category', 'Value':'Walls'}]", isRequired: true)]
-        public List<FilterInstruction> Filters { get; set; } // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
+        [AtomicParam(@"CRITICAL ORDER: The array must contain at least 2 filters.
+            1. The FIRST is always the Scope (e.g., {'kind': 'scope_active_view'} or {'kind': 'scope_project'}).
+            2. The SECOND is the Category (e.g., {'kind': 'category', 'CategoryName': 'OST_Walls'}).
+            Example: [{'kind': 'scope_active_view'}, {'kind': 'category', 'CategoryName': 'OST_Walls'}]", isRequired: true)]
+        public JArray Filters { get; set; }
 
         public AtomicResult Execute(Dictionary<string, object> parameters)
         {
-            System.Diagnostics.Debug.WriteLine("[SearchElementCmd]: Метод Execute вызван.");
-
-            if (Filters != null)
+            try { 
+            // 1. Получаем инструкции от ИИ
+            if (!parameters.TryGetValue("filters", out var rawFilters) || !(rawFilters is JArray instructions))
             {
-                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Получены фильтры из JSON: {Filters.ToString()}");
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("[SearchElementCmd]: ОШИБКА: Параметр Filters пуст или не десериализован!");
-            }
-            parameters.TryGetValue("Filters", out var rawData);
-
-            var factory = new SearchFactory();
-            var filterChain = factory.CreateLogic(rawData);
-
-            var collector = new FilteredElementCollector(TransactionManager.CurrentHandler.UIDoc.Document);
-
-            if (!filterChain.Any(f => f is ISearchInitializer))
-            {
-                filterChain.Insert(0, new ActiveViewFilterInitializer());
+                System.Diagnostics.Debug.WriteLine("[SearchElementCmd]: Error - No filter instructions found in parameters.");
+                return new AtomicResult { Success = false };
             }
 
-            // Применяем фильтры по очереди (сначала быстрые, потом медленные)
-            foreach (ISearchFilter filter in filterChain)
+            var factory = new AtomicSearchFactory();
+            var filterChain = factory.CreateFilterChain(instructions);
+
+            System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Starting execution chain. Total filters: {filterChain.Count}");
+
+            FilteredElementCollector collector = null;
+            Document doc = TransactionManager.CurrentHandler.UIDoc.Document;
+
+            foreach (var filter in filterChain)
             {
-                collector = filter.Apply(TransactionManager.CurrentHandler.UIDoc.Document, collector);
+                collector = filter.Apply(doc, collector);
+
+                // Логируем состояние после каждого фильтра
+                int count = (collector != null) ? collector.GetElementCount() : 0;
+                System.Diagnostics.Debug.WriteLine($"   -> Applied: {filter} (Priority: {filter.Priority}). Elements in collector: {count}");
             }
 
-            var results = collector.ToElementIds();
+            var elementIds = collector.ToElementIds();
 
-            System.Diagnostics.Debug.WriteLine($"Serched elements: {results.Count}.", "SearchElementCmd");
+            System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Finished. Final result: {elementIds.Count} elements.");
 
-            return new AtomicResult { Success = true, Data = results, Message = $"Searched elements: {results.Count}." };
+            return new AtomicResult { Success = true, Data = elementIds, Message = $"Найдено элементов: {elementIds.Count}" };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: CRITICAL ERROR during filter chain: {ex.Message}");
+                return new AtomicResult { Success = false };
+            }
         }
     }
 }

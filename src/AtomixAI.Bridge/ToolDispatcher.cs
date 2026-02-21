@@ -28,6 +28,41 @@ namespace AtomixAI.Bridge
                 );
         }
 
+        // Добавьте этот метод в класс ToolDispatcher
+        public async Task<AtomicResult> DispatchAsync(string toolId, string jsonArguments)
+        {
+            // 1. Сначала подготавливаем команду (логика та же, что в обычном Dispatch)
+            var rawParams = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonArguments) ?? new Dictionary<string, object>();
+            var parameters = new Dictionary<string, object>(rawParams, StringComparer.OrdinalIgnoreCase);
+
+            if (!_csCommands.TryGetValue(toolId, out var commandType))
+            {
+                return new AtomicResult { Success = false, Message = $"Command {toolId} not found." };
+            }
+
+            var instance = (IAtomicCommand)Activator.CreateInstance(commandType);
+
+            // Заполнение свойств через Reflection (Length, Categories и т.д.)
+            foreach (var prop in commandType.GetProperties())
+            {
+                if (parameters.TryGetValue(prop.Name, out var value) && value != null)
+                {
+                    try
+                    {
+                        object convertedValue = prop.PropertyType == typeof(double)
+                            ? ParseToRevitFeet(value)
+                            : Convert.ChangeType(value, prop.PropertyType);
+                        prop.SetValue(instance, convertedValue);
+                    }
+                    catch { continue; }
+                }
+            }
+
+            // 2. ВАЖНО: Вместо мгновенного ExecuteSafe, вызываем асинхронное выполнение
+            // Это «заморозит» выполнение текущего потока до тех пор, пока Revit не отработает
+            return await TransactionManager.ExecuteAsync(toolId, () => instance.Execute(parameters));
+        }
+
         public AtomicResult Dispatch(string toolId, string jsonArguments)
         {
             try
@@ -90,6 +125,28 @@ namespace AtomixAI.Bridge
             {
                 return new AtomicResult { Success = false, Message = $"Dispatcher Error: {ex.Message}" };
             }
+        }
+
+        public static double ParseToRevitFeet(object rawValue)
+        {
+            // Очистка строки и нормализация разделителей
+            string input = rawValue?.ToString()?.ToLower()
+                ?.Replace(" ", "").Replace(",", ".") ?? "0";
+
+            // Выделяем только числовую часть
+            string numericPart = new string(input.TakeWhile(c => char.IsDigit(c) || c == '.' || c == '-').ToArray());
+            if (!double.TryParse(numericPart, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out double value)) return 0;
+
+            // Маппинг единиц измерения во внутренние футы Revit
+            if (input.EndsWith("mm")) return value / 304.8;
+            if (input.EndsWith("cm")) return value / 30.48;
+            if (input.EndsWith("m")) return value / 0.3048;
+            if (input.EndsWith("in")) return value / 12.0;
+            if (input.EndsWith("ft")) return value; // Уже футы
+
+            // По умолчанию (если единиц нет) считаем, что прилетели ММ
+            return value / 304.8;
         }
     }
 }

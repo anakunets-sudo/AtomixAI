@@ -1,5 +1,6 @@
 ﻿using AtomixAI.Bridge;
 using AtomixAI.Core;
+using Autodesk.Revit.UI;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using System;
@@ -69,6 +70,10 @@ namespace AtomixAI.Main.UI
                 _isInitializing = false;
             }
         }
+
+        public static DockablePaneId ID => new DockablePaneId(new Guid("D5CE62F3-154E-43D0-9036-78A4A69215A7"));
+
+        public static string PaneName => "AtomixAI v1.0";
 
         public AtomixDockablePane(Infrastructure.AtomicExternalEventHandler handler, Autodesk.Revit.UI.ExternalEvent exEvent, McpHost mcpHost)
         {

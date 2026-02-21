@@ -87,8 +87,8 @@ namespace AtomixAI.Atomic
                 // 2. Ключ из имени класса (fallback)
                 string cleanName = type.Name
                     /*.Replace("Action", "").Replace("Command", "")
-                    .Replace("Filter", "").Replace("Initializer", "")
-                    .Replace("_", "")*/
+                    .Replace("Filter", "").Replace("Initializer", "")*/
+                    .Replace("_", "")
                     .ToLower();
 
                 keys.Add(cleanName);

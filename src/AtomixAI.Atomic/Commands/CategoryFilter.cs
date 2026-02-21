@@ -33,6 +33,12 @@ namespace AtomixAI.Atomic.Commands
         /// </summary>
         public FilteredElementCollector Apply(Document doc, FilteredElementCollector collector)
         {
+            if (collector == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ERROR] {this.GetType().Name}: Incoming collector is NULL!");
+                return null;
+            }
+
             var bic = ResolveCategory(CategoryName);
 
             if (bic == BuiltInCategory.INVALID) return collector;

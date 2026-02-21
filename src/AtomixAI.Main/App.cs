@@ -18,7 +18,7 @@ namespace AtomixAI.Main
         private ExternalEvent _externalEvent;
         private Infrastructure.AtomicExternalEventHandler _handler;
         private AtomixDockablePane _pane;
-        public static readonly DockablePaneId PaneId = new DockablePaneId(new Guid("D5CE62F3-154E-43D0-9036-78A4A69215A7"));
+        public static readonly DockablePaneId PaneId = AtomixDockablePane.ID;
 
         private System.Diagnostics.Process _pyProcess;
         private System.Diagnostics.Process _vocalSyncProcess;
@@ -56,6 +56,7 @@ namespace AtomixAI.Main
 
                 _pyProcess = new System.Diagnostics.Process { StartInfo = startInfo };
                 _pyProcess.Start();
+                ProcessJobTracker.AddProcess(_pyProcess);
 
                 // Читаем логи Python в окно Output Visual Studio для отладки
                 _pyProcess.BeginOutputReadLine();
@@ -87,6 +88,7 @@ namespace AtomixAI.Main
 
                 _vocalSyncProcess = new Process { StartInfo = startInfo };
                 _vocalSyncProcess.Start();
+                ProcessJobTracker.AddProcess(_vocalSyncProcess);
 
                 Debug.WriteLine("[AtomixAI] VocalSync Engine Started.");
             }
@@ -146,7 +148,7 @@ namespace AtomixAI.Main
 
                 // 4. Регистрируем панель, передавая в неё McpHost
                 _pane = new AtomixDockablePane(_handler, _externalEvent, _mcpHost); // ДОБАВЛЕНО: _mcpHost
-                application.RegisterDockablePane(PaneId, "AtomixAI v1.0", _pane);
+                application.RegisterDockablePane(PaneId, AtomixDockablePane.PaneName, _pane);
 
                 // Подписка на ответы от ИИ для проброса в UI
                 _mcpHost.OnMessageReceived += (jsonPayload) => {
@@ -203,6 +205,8 @@ namespace AtomixAI.Main
                 };
 #endif
 
+                CreateRibbon(application);
+
                 StartVocalSyncServer(_pane);
 
                 StartVocalSyncProcess();
@@ -219,10 +223,39 @@ namespace AtomixAI.Main
         public Result OnShutdown(UIControlledApplication application)
         {
             _mcpHost?.Stop();
-            _pyProcess?.Kill();
-            _vocalSyncProcess?.Kill();
+            try
+            {
+                if (_pyProcess != null && !_pyProcess.HasExited) _pyProcess.Kill();
+                if (_vocalSyncProcess != null && !_vocalSyncProcess.HasExited) _vocalSyncProcess.Kill();
+            }
+            catch { /* Handle exit race conditions */ }
 
             return Result.Succeeded;
+        }
+
+        private void CreateRibbon(UIControlledApplication a)
+        {
+            string tabName = "AtomicBIM";
+            try { a.CreateRibbonTab(tabName); } catch { } // Создаем вкладку, если её нет
+
+            RibbonPanel panel = a.CreateRibbonPanel(tabName, "Tools");
+
+            // Путь к текущей DLL
+            string assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+
+            // Создаем кнопку, которая вызывает наш класс ShowAiPane (из Command.cs)
+            PushButtonData btnData = new PushButtonData(
+                "Show Pane",
+                "Open AI\nChat",
+                assemblyPath,
+                "AtomixAI.Main.ShowPane" // Полное имя класса с пространством имен!
+            );
+
+            PushButton btn = panel.AddItem(btnData) as PushButton;
+            btn.ToolTip = "Open the AI ​​control panel";
+
+            // Можно добавить иконку (32x32)
+            // btn.LargeImage = new BitmapImage(new Uri("pack://application:,,,/YourAssembly;component/Resources/ai_icon.png"));
         }
     }
 }
