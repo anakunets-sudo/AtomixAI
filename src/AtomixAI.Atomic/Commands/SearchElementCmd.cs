@@ -6,107 +6,69 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace AtomixAI.Atomic.Commands
 {
+
     [AtomicInfo(
-        name: "search_elements",
-        group: AtomicGroupType.Creation,
-        description: "Complex element search using a pipeline of filters (Category, Level, Parameter, etc.",
-        keywords: new[] { "wall", "line", "create" })]
-    public class SearchElementCmd : IAtomicCommandSearch
+    name: "search_elements",
+    group: AtomicGroupType.Creation,
+    description: "Complex element search using a pipeline of filters (Category, Level, Parameter, etc.",
+    keywords: new[] { "search", "how many", "which" })]
+    public class SearchElementCmd : IAtomicCommand
     {
-        public string CommandId => this.GetType().GetCustomAttribute<AtomicInfoAttribute>()?.Name;
-        [AtomicParam("A unique identifier to save the command's output into global memory for future steps (e.g., 'CreatedWall_1').")]
+        public string CommandId => this.GetType().GetCustomAttribute<Core.AtomicInfoAttribute>()?.Name;
+        [AtomicParam("A unique identifier to save the command's output into global memory for future steps (e.g., 'search_elements_1').")]
         public string ResultAlias { get; set; }
 
-        [AtomicParam("Список фильтров. Пример: [{'Kind':'category', 'Value':'Walls'}]", isRequired: true)]
-        public List<FilterInstruction> Filters { get; set; }
+        [AtomicParam(@"CRITICAL ORDER: The array must contain at least 2 filters.
+            1. The FIRST is always the Scope (e.g., {'kind': 'scope_active_view'} or {'kind': 'scope_project'}).
+            2. The SECOND is the Category (e.g., {'kind': 'category', 'CategoryName': 'OST_Walls'}).
+            Example: [{'kind': 'scope_active_view'}, {'kind': 'category', 'CategoryName': 'OST_Walls'}]", isRequired: true)]
+        public JArray Filters { get; set; }
 
         public AtomicResult Execute(Dictionary<string, object> parameters)
         {
             try
             {
-                if (parameters == null)
-                    return new AtomicResult { Success = false, Message = "Parameters dictionary is null." };
+                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Execute");
 
-                parameters.TryGetValue("filters", out var rawData);
-
-                JArray instructions = null;
-
-                // Accept raw JSON string as well as JArray or List<FilterInstruction>
-                if (rawData is string rawStr)
+                // 1. Получаем инструкции от ИИ
+                if (!parameters.TryGetValue("filters", out var rawFilters) || !(rawFilters is JArray instructions))
                 {
-                    try
-                    {
-                        var parsed = JToken.Parse(rawStr);
-                        instructions = parsed is JArray ja ? ja : new JArray(parsed);
-                    }
-                    catch (Exception parseEx)
-                    {
-                        Debug.WriteLine($"SearchElementCmd: failed to parse filters JSON: {parseEx}", nameof(SearchElementCmd));
-                        return new AtomicResult { Success = false, Message = "Failed to parse filters JSON." };
-                    }
+                    System.Diagnostics.Debug.WriteLine("[SearchElementCmd]: Error - No filter instructions found in parameters.");
+                    return new AtomicResult { Success = false };
                 }
 
-                // ✅ ИСПРАВЛЕНО: используем AtomicSearchFactory вместо SearchFactory
                 var factory = new AtomicSearchFactory();
-                var filterChain = factory.CreateFilterChain(instructions) ?? new List<ISearchFilter>();
+                var filterChain = factory.CreateFilterChain(instructions);
 
-                // Validate Revit context
-                var handler = TransactionManager.CurrentHandler;
-                if (handler == null || handler.UIDoc == null || handler.UIDoc.Document == null)
-                {
-                    Debug.WriteLine("SearchElementCmd: Revit document/context is not available.", nameof(SearchElementCmd));
-                    return new AtomicResult { Success = false, Message = "No active Revit document (TransactionManager.CurrentHandler or UIDoc is null)." };
-                }
+                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Starting execution chain. Total filters: {filterChain.Count}");
 
-                var doc = handler.UIDoc.Document;
-                var collector = new FilteredElementCollector(doc);
+                FilteredElementCollector collector = null;
+                Document doc = TransactionManager.CurrentHandler.UIDoc.Document;
 
-                // Ensure initializer exists
-                if (!filterChain.Any(f => f is ISearchInitializer))
-                {
-                    filterChain.Insert(0, new ActiveViewFilterInitializer());
-                }
-
-                // Apply filters with safety checks
                 foreach (var filter in filterChain)
                 {
-                    if (filter == null)
-                    {
-                        Debug.WriteLine("SearchElementCmd: encountered null filter in chain.", nameof(SearchElementCmd));
-                        return new AtomicResult { Success = false, Message = "Encountered null filter in chain." };
-                    }
+                    collector = filter.Apply(doc, collector);
 
-                    var next = filter.Apply(doc, collector);
-                    if (next == null)
-                    {
-                        Debug.WriteLine($"SearchElementCmd: filter {filter.GetType().Name} returned null collector.", nameof(SearchElementCmd));
-                        return new AtomicResult { Success = false, Message = $"Filter {filter.GetType().Name} returned null collector." };
-                    }
-
-                    collector = next;
+                    // Логируем состояние после каждого фильтра
+                    int count = (collector != null) ? collector.GetElementCount() : 0;
+                    System.Diagnostics.Debug.WriteLine($"   -> Applied: {filter} (Priority: {filter.Priority}). Elements in collector: {count}");
                 }
 
-                var results = collector?.ToElementIds() ?? Enumerable.Empty<ElementId>();
-                var resultsList = results.ToList();
+                var elementIds = collector.ToElementIds();
 
-                Debug.WriteLine($"SearchElementCmd: Searched elements: {resultsList.Count}.", nameof(SearchElementCmd));
+                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: Finished. Final result: {elementIds.Count} elements.");
 
-                // ✅ ПРОСТО ВОЗВРАЩАЕМ РЕЗУЛЬТАТ
-                // ToolDispatcher сохранит в AtomicStorage автоматически, если ResultAlias задан!
-                return new AtomicResult
-                {
-                    Success = true,
-                    Data = resultsList,
-                    Message = $"Searched elements: {resultsList.Count}."
-                };
+                return new AtomicResult { Success = true, Data = elementIds, Message = $"Найдено элементов: {elementIds.Count}" };
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"SearchElementCmd failed: {ex}", nameof(SearchElementCmd));
-                return new AtomicResult { Success = false, Message = ex.Message, Data = null };
+                System.Diagnostics.Debug.WriteLine($"[SearchElementCmd]: CRITICAL ERROR during filter chain: {ex.Message}");
+                return new AtomicResult { Success = false };
             }
         }
     }

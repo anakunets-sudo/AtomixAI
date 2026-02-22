@@ -15,7 +15,7 @@ namespace AtomixAI.Atomic.Commands
     {
         public string CommandId => "create_wall";
 
-        [AtomicParam("A unique identifier to save the command's output into global memory for future steps (e.g., 'CreatedWall_1').")]
+        [AtomicParam("A unique identifier to save the command's output into global memory for future steps (e.g., 'create_wall_1').")]
         public string ResultAlias { get; set; }
 
         [AtomicParam("Длина стены (например, '5000mm' или '10ft')", isRequired: true)]
