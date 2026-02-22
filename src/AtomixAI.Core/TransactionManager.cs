@@ -6,9 +6,11 @@ namespace AtomixAI.Core
     public static class TransactionManager
     {
         public static Func<string, ITransactionHandler>? TransactionFactory { get; set; }
+
         // Храним текущий хендлер для доступа из команд 
         [ThreadStatic]
         private static ITransactionHandler? _currentHandler;
+
         public static ITransactionHandler? CurrentHandler => _currentHandler;
 
         public static AtomicResult ExecuteSafe(string name, Action action)

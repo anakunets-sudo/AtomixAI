@@ -98,7 +98,7 @@ def process_ai_logic(user_text, tools, client):
             # Отправляем в Revit и игнорируем вложенные события во время выполнения
             res, _ = client.send_receive(payload)
             print(f"[Revit Result]: {res}")
-            return f"Выполнено: {call.function.name}"
+            return f"Выполнено: {call.function}"
     else:
         return response.message.content
 

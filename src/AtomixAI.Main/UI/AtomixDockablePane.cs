@@ -71,10 +71,6 @@ namespace AtomixAI.Main.UI
             }
         }
 
-        public static DockablePaneId ID => new DockablePaneId(new Guid("D5CE62F3-154E-43D0-9036-78A4A69215A7"));
-
-        public static string PaneName => "AtomixAI v1.0";
-
         public AtomixDockablePane(Infrastructure.AtomicExternalEventHandler handler, Autodesk.Revit.UI.ExternalEvent exEvent, McpHost mcpHost)
         {
             _handler = handler;
@@ -122,7 +118,6 @@ namespace AtomixAI.Main.UI
                 TabBehind = Autodesk.Revit.UI.DockablePanes.BuiltInDockablePanes.ProjectBrowser
             };
         }
-
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
@@ -198,6 +193,9 @@ namespace AtomixAI.Main.UI
                 System.Diagnostics.Debug.WriteLine($"[WebView Bridge Error]: {ex.Message}");
             }
         }
+        public static DockablePaneId ID => new DockablePaneId(new Guid("704D02EE-A17E-4A10-B53C-3DA5E86FE758"));
+
+        public static string Name => "AtomicBIM v1.0";
     }
 }
 

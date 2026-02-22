@@ -148,7 +148,7 @@ namespace AtomixAI.Main
 
                 // 4. Регистрируем панель, передавая в неё McpHost
                 _pane = new AtomixDockablePane(_handler, _externalEvent, _mcpHost); // ДОБАВЛЕНО: _mcpHost
-                application.RegisterDockablePane(PaneId, AtomixDockablePane.PaneName, _pane);
+                application.RegisterDockablePane(PaneId, AtomixDockablePane.Name, _pane);
 
                 // Подписка на ответы от ИИ для проброса в UI
                 _mcpHost.OnMessageReceived += (jsonPayload) => {

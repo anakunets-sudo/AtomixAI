@@ -9,6 +9,9 @@ namespace AtomixAI.Core
         // Техническое имя для вызова из MCP (например, "wall_create")
         string CommandId { get; }
 
+        // Метка, которую ИИ передает для сохранения результата (например, "wall_1")
+        string ResultAlias { get; set; }
+
         // Основной метод выполнения
         AtomicResult Execute(Dictionary<string, object> parameters);
     }

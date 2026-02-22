@@ -86,7 +86,7 @@ namespace AtomixAI.Bridge
                         {
                             // 1. Читаем запрос от Python (например, опрос или вызов функции)
                             string requestRaw = await reader.ReadLineAsync();
-                            //System.Diagnostics.Debug.WriteLine($"[PIPE RECEIVED]: {requestRaw}");
+                            System.Diagnostics.Debug.WriteLine($"[PIPE RECEIVED]: {requestRaw}");
 
                             if (string.IsNullOrEmpty(requestRaw))
                                 break;
@@ -145,7 +145,6 @@ namespace AtomixAI.Bridge
             }
         }
 
-        /*
         private string ProcessRequest(string json)
         {
             try
@@ -187,7 +186,7 @@ namespace AtomixAI.Bridge
             {
                 return JsonConvert.SerializeObject(new { error = $"Processing Error: {ex.Message}" });
             }
-        }*/
+        }
 
         public void Stop() => _isRunning = false;
     }
