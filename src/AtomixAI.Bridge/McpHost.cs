@@ -86,7 +86,7 @@ namespace AtomixAI.Bridge
                         {
                             // 1. Читаем запрос от Python (например, опрос или вызов функции)
                             string requestRaw = await reader.ReadLineAsync();
-                            System.Diagnostics.Debug.WriteLine($"[PIPE RECEIVED]: {requestRaw}");
+                            //System.Diagnostics.Debug.WriteLine($"[PIPE RECEIVED]: {requestRaw}");
 
                             if (string.IsNullOrEmpty(requestRaw))
                                 break;

@@ -17,6 +17,7 @@ namespace AtomixAI.Atomic.Commands
     public class SearchElementCmd : IAtomicCommandSearch
     {
         public string CommandId => this.GetType().GetCustomAttribute<AtomicInfoAttribute>()?.Name;
+        [AtomicParam("A unique identifier to save the command's output into global memory for future steps (e.g., 'CreatedWall_1').")]
         public string ResultAlias { get; set; }
 
         [AtomicParam("Список фильтров. Пример: [{'Kind':'category', 'Value':'Walls'}]", isRequired: true)]
