@@ -1,19 +1,18 @@
 ﻿import os
 import sys
-
-# Добавляем папку со скриптом в пути поиска модулей
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.append(script_dir)
-
 import json
 import ollama
 import win32file
 import win32pipe
 import pywintypes
 import time
-import sys
-import instructions 
+
+# Добавляем путь для импорта инструкций
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
+import instructions
 
 # --- CONFIGURATION ---
 PIPE_NAME = r'\\.\pipe\AtomixAI_Bridge_Pipe'
@@ -38,25 +37,17 @@ class RevitPipeClient:
 
     def send_receive(self, payload):
         try:
-            # Добавляем \n при отправке, чтобы C# считал это одной строкой
             win32file.WriteFile(self.handle, (json.dumps(payload) + "\n").encode('utf-8'))
-        
-            # Читаем ответ
             _, data = win32file.ReadFile(self.handle, 65536)
-        
-            # ОЧИЩАЕМ строку от возможных лишних байтов в конце (особенно важно для отладки)
             decoded_data = data.decode('utf-8').strip()
-            if not decoded_data:
-                return None, None
+            if not decoded_data: return None, None
             
             raw_res = json.loads(decoded_data)
-        
             if isinstance(raw_res, dict) and "ui_event" in raw_res:
                 return raw_res["result"], raw_res["ui_event"]
-        
             return raw_res, None
         except Exception as e:
-            print(f"[!] Error in Pipe: {e}")
+            print(f"[!] Pipe Error: {e}")
             return {"error": str(e)}, None
 
 def mcp_to_ollama(mcp_tools):
@@ -73,45 +64,79 @@ def mcp_to_ollama(mcp_tools):
     return ready_tools
 
 def process_ai_logic(user_text, tools, client):
-    """Логика взаимодействия с Ollama и вызова инструментов"""
-    print(f"[Thinking] Анализ запроса: {user_text}")
-    
-    response = ollama.chat(
-        model=MODEL_NAME,
-        messages=[
-            {'role': 'system', 'content': instructions.PROFILES["default"]}, 
-            {'role': 'user', 'content': user_text}
-        ],
-        tools=tools
-    )
+    """
+    Улучшенная логика: 
+    1. ИИ решает вызвать инструмент.
+    2. Мы выполняем его в Revit.
+    3. Мы возвращаем результат в ИИ.
+    4. ИИ формулирует ответ пользователю.
+    """
+    messages = [
+        {'role': 'system', 'content': instructions.PROFILES["default"]},
+        {'role': 'user', 'content': user_text}
+    ]
 
+    # --- ШАГ 1: Первичный запрос к модели ---
+    response = ollama.chat(model=MODEL_NAME, messages=messages, tools=tools)
+
+    # --- ШАГ 2: Обработка вызовов инструментов (если есть) ---
     if response.message.tool_calls:
+        # Добавляем ответ модели (с намерением вызвать инструмент) в историю
+        messages.append(response.message)
+
         for call in response.message.tool_calls:
-            print(f"[Action] Вызов {call.function.name}...")
+            tool_name = call.function.name
             args = call.function.arguments if call.function.arguments else {}
+            
+            print(f"[Action] Вызываю Revit: {tool_name}({args})")
             
             payload = {
                 "action": "call",
-                "name": call.function.name,
+                "name": tool_name,
                 "arguments": json.dumps(args)
             }
-            # Отправляем в Revit и игнорируем вложенные события во время выполнения
-            res, _ = client.send_receive(payload)
-            print(f"[Revit Result]: {res}")
-            return f"Выполнено: {call.function.name}"
-    else:
-        return response.message.content
+            
+            # Отправляем в Revit
+            revit_res, _ = client.send_receive(payload)
+            
+            # Формируем ответ от 'инструмента' для ИИ
+            # Мы берем Success, Message и Data из AtomicResult
+            status = "Success" if revit_res.get("success") else "Error"
+            msg = revit_res.get("message", "No message")
+            data = revit_res.get("data", "")
+            
+            tool_result_content = (
+                f"STATUS: SUCCESS. COMMAND COMPLETED.\n"
+                f"Tool: {tool_name}\n"
+                f"Revit_Output: {msg}\n"
+                f"Created_Element_ID: {data}\n"
+                f"IMPORTANT: Respond to the user in RUSSIAN language only."
+            )
+            print(f"[Revit Context]: {tool_result_content}")
+
+            # Добавляем результат выполнения в контекст диалога
+            messages.append({
+                'role': 'tool',
+                'content': tool_result_content,
+            })
+
+        # --- ШАГ 3: Финальный проход (ИИ анализирует результаты и отвечает юзеру) ---
+        final_response = ollama.chat(model=MODEL_NAME, messages=messages)
+        return final_response.message.content
+    
+    # Если инструментов не потребовалось
+    return response.message.content
 
 def main():
     client = RevitPipeClient(PIPE_NAME)
     if not client.connect(): return
 
-    # 1. Sync Tools
+    # Синхронизация инструментов
     res, _ = client.send_receive({"action": "list"})
     tools = mcp_to_ollama(res.get("tools", []))
-    print(f"[*] Инструменты синхронизированы ({len(tools)} шт.)")
+    print(f"[*] Инструменты синхронизированы: {len(tools)} шт.")
 
-    # После успешного подключения и получения списка инструментов
+    # Статус в UI
     client.send_receive({
         "action": "ui_log",
         "type": "system_status",
@@ -119,24 +144,22 @@ def main():
         "status": "online"
     })
 
-    print("[*] Ожидание команд из интерфейса Revit...")
+    print("[*] Ожидание команд...")
     
     while True:
-        # 2. Пинг-опрос (Heartbeat). Мы шлем пустой запрос, чтобы забрать события из UI
-        # В McpHost.ProcessRequest мы добавили обработку неизвестных экшенов -> статус "ok"
-        res, ui_event = client.send_receive({"action": "ping"})
+        # Пинг для получения событий из WebView2
+        _, ui_event = client.send_receive({"action": "ping"})
 
         if ui_event:
             action = ui_event.get("action")
-            
             if action == "chat_request":
                 prompt = ui_event.get("prompt")
-                print(f"\n[UI User]: {prompt}")
+                print(f"\n[USER]: {prompt}")
                 
-                # Запускаем мозг
+                # Получаем осмысленный ответ от ИИ
                 ai_text = process_ai_logic(prompt, tools, client)
                 
-                # Отправляем ответ обратно, чтобы C# переслал его в WebView2
+                # Отправляем в UI Revit
                 client.send_receive({
                     "action": "ui_log", 
                     "role": "ai", 
@@ -144,10 +167,9 @@ def main():
                 })
 
             elif action == "stop":
-                print("\n[!] Получен сигнал EMERGENCY STOP. Прерывание текущих задач.")
-                # Здесь можно добавить логику сброса контекста Ollama
+                print("\n[!] EMERGENCY STOP")
         
-        time.sleep(0.5) # Пауза между опросами, чтобы не грузить CPU
+        time.sleep(0.4)
 
 if __name__ == "__main__":
     main()

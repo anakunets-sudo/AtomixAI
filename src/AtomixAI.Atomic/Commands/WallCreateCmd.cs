@@ -54,13 +54,18 @@ namespace AtomixAI.Atomic.Commands
 
                 Debug.WriteLine($"WallCreateCmd: Wall created with ID {createdWallId.IntegerValue}", nameof(WallCreateCmd));
 
-                // ✅ ВОЗВРАЩАЕМ ID СОЗДАННОЙ СТЕНЫ
-                // ToolDispatcher сохранит его в ResultAlias автоматически!
+                if (createdWallId == null || createdWallId == ElementId.InvalidElementId)
+                {
+                    return new AtomicResult { Success = false, Message = "Wall creation failed (Invalid ID)." };
+                }
+
+                Debug.WriteLine($"[WallCreateCmd] Финальная проверка перед возвратом. ID: {createdWallId}");
+
                 return new AtomicResult
                 {
                     Success = true,
-                    Data = createdWallId,
-                    Message = $"Wall created with length {Length} ft"
+                    Data = createdWallId, // Убедись, что ToolDispatcher ожидает именно объект ElementId
+                    Message = $"1 wall created successfully."
                 };
             }
             catch (Exception ex)
