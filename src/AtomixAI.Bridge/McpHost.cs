@@ -145,12 +145,41 @@ namespace AtomixAI.Bridge
             }
         }
 
+        // Внутри McpHost.cs добавим метод для отправки результата выполнения команды
+        public void SendToolResult(AtomicResult result, string toolId)
+        {
+            var response = new
+            {
+                action = "tool_execution_result",
+                tool = toolId,
+                success = result.Success,
+                message = result.Message,
+                data = result.Data // Например, количество найденных элементов
+            };
+
+            // Кладём в очередь для отправки в Python при следующем опросе (poll)
+            BroadcastToClients(JsonConvert.SerializeObject(response));
+        }
         private string ProcessRequest(string json)
         {
             try
             {
                 var request = JObject.Parse(json);
                 string action = request["action"]?.ToString();
+
+                if (action == "get_manual")
+                {
+                    // Возвращаем текстовый мануал, собранный через Reflection
+                    return Registry.GetAiManual();
+                }
+
+                if (action == "get_context_state")
+                {
+                    return JsonConvert.SerializeObject(new
+                    {
+                        aliases = Registry.GetActiveContentStateAliases()
+                    });
+                }
 
                 // НОВЫЙ КЕЙС: Ответ от ИИ для интерфейса
                 if (action == "ui_log")

@@ -14,12 +14,12 @@ namespace AtomixAI.Atomic.Commands
     /// Always has the highest priority (0) to start the search chain.
     /// </summary>
     [AtomicInfo(
-    name: "scope_active_view",
+    name: "scope_selected_elements",
     group: AtomicGroupType.Search,
-    description: "Active view search initializer.",
-    keywords: new[] { "active", "view", "search" }
+    description: "In the selected elements search initializer.",
+    keywords: new[] { "selected", "elements", "search" }
 )]
-    public class ActiveViewFilterInitializer : ISearchFilter, ISearchInitializer
+    public class SelectedElementsFilterInitializer : ISearchFilter, ISearchInitializer
     {
         // <summary>
         /// Execution priority. 0 means it runs first.
@@ -34,7 +34,7 @@ namespace AtomixAI.Atomic.Commands
         /// <returns>A new collector containing all project elements.</returns>
         public FilteredElementCollector Apply(UIDocument uidoc, FilteredElementCollector collector)
         {
-            collector = new FilteredElementCollector(uidoc.Document, uidoc.ActiveView.Id);
+            collector = new FilteredElementCollector(uidoc.Document, uidoc.Selection.GetElementIds());
 
             System.Diagnostics.Debug.WriteLine($"ActiveViewFilterInitializer", this.GetType().Name);
 

@@ -1,4 +1,5 @@
 ﻿using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,6 @@ namespace AtomixAI.Core
         int Priority { get; }
 
         // Применяет фильтрацию к входящему коллектору 
-        FilteredElementCollector Apply(Document doc, FilteredElementCollector collector);
+        FilteredElementCollector Apply(UIDocument uiDoc, FilteredElementCollector collector);
     }
 }

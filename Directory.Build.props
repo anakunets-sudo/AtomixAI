@@ -39,6 +39,7 @@
 
     <!-- Глобальные константы C# -->
     <DefineConstants Condition="'$(RevitVersion)' != ''">$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2024'">$(DefineConstants);REVIT2024_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025'">$(DefineConstants);REVIT2025_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2026'">$(DefineConstants);REVIT2026_OR_GREATER</DefineConstants>
   </PropertyGroup>

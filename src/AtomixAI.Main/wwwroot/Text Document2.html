@@ -96,7 +96,93 @@
         </label>
         <span style="font-family: 'Segoe MDL2 Assets'; font-size: 10px;"></span>
     </div>
+</div><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>AtomixAI | ГИП-Контроль</title>
+    <style>
+        :root { --bg: #1e1e1e; --card: #2d2d2d; --accent: #0078d4; --text: #e0e0e0; --success: #28a745; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        .pipeline { display: flex; flex-direction: column; gap: 10px; max-width: 500px; margin: 0 auto; }
+        
+        .step { 
+            background: var(--card); border-left: 4px solid var(--accent);
+            padding: 15px; border-radius: 4px; position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+        .step-header { font-weight: bold; color: var(--accent); margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .step-args { font-family: monospace; font-size: 0.85em; background: #121212; padding: 8px; border-radius: 4px; }
+        
+        .plus-btn {
+            align-self: center; background: none; border: 1px dashed #555; color: #888;
+            cursor: pointer; padding: 5px 15px; border-radius: 20px; transition: 0.2s;
+        }
+        .plus-btn:hover { border-color: var(--accent); color: var(--accent); background: #ffffff05; }
+
+        .controls { margin-top: 30px; display: flex; gap: 10px; justify-content: center; }
+        button.primary { background: var(--success); color: white; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button.secondary { background: #444; color: white; border: none; padding: 10px 25px; border-radius: 4px; cursor: pointer; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .in-out { color: #ffa500; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h2 style="text-align: center;">План действий AtomixAI</h2>
+<p style="text-align: center; color: #888; font-size: 0.9em;">ГИП может подтвердить или изменить цепочку</p>
+
+<div class="pipeline" id="pipeline">
+    <!-- Шаг 1 -->
+    <div class="step">
+        <div class="step-header"><span>1. search_elements</span></div>
+        <div class="step-args">
+            Category: <span style="color: #4ec9b0;">OST_Windows</span><br>
+            Out: <span class="in-out">"win_memory"</span>
+        </div>
+    </div>
+
+    <!-- Кнопка инъекции -->
+    <button class="plus-btn" onclick="injectStep(1)">+ Вставить команду X</button>
+
+    <!-- Шаг 2 -->
+    <div class="step">
+        <div class="step-header"><span>2. select_elements</span></div>
+        <div class="step-args">
+            In: <span class="in-out">"win_memory"</span>
+        </div>
+    </div>
 </div>
+
+<div class="controls">
+    <button class="secondary" onclick="requestEdit()">✏️ Исправить промптом</button>
+    <button class="primary" onclick="approve()">✅ В работу (Revit)</button>
+</div>
+
+<script>
+    function injectStep(afterId) {
+        const cmd = prompt("Какую команду вставить? (например: zoom_elements)");
+        if (cmd) {
+            alert(`Отправка в Python: ГИП просит вставить ${cmd} после шага ${afterId}.\nИИ перестроит связи In/Out автоматически.`);
+            // Здесь будет: window.chrome.webview.postMessage({action: "plan_modified", feedback: "Вставь " + cmd});
+        }
+    }
+
+    function approve() {
+        alert("План утвержден! Команды ушли в Revit TransactionManager.");
+    }
+
+    function requestEdit() {
+        const note = prompt("Что именно ИИ сделал не так?");
+        if (note) {
+            console.log("Feedback to AI:", note);
+        }
+    }
+</script>
+
+</body>
+</html>
 
 <script>
     function sendMessage() {

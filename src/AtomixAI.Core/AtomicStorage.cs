@@ -25,25 +25,38 @@ namespace AtomixAI.Core
         {
             lock (_lockObj)
             {
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] ⇒ '{alias}' ({value?.GetType().Name ?? "null"})");
+                // 1. Фильтр системных имен (Твой код)
+                if (string.IsNullOrWhiteSpace(alias) || alias.Equals("none", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
 
+                // 2. Обработка удаления через null (Предохранитель для catch)
+                if (value == null)
+                {
+                    Remove(alias); // Если команда упала, алиас "сгорает" и удаляется из истории
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] ⇒ '{alias}' ({value.GetType().Name})");
+
+                // 3. Обновление истории (делаем ключ "свежим")
                 if (_data.ContainsKey(alias))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] Обновление существующего значения");
                     _history.Remove(alias);
                 }
+                // 4. Контроль переполнения памяти
                 else if (_history.Count >= MaxCapacity)
                 {
                     var oldest = _history[0];
-                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] Лимит ({MaxCapacity}), удаляю старейший: {oldest}");
                     _history.RemoveAt(0);
                     _data.Remove(oldest);
+                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage] Лимит достигнут. Удален старый алиас: {oldest}");
                 }
 
+                // 5. Сохранение
                 _history.Add(alias);
                 _data[alias] = value;
-
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] ✓ Сохранено (Total: {_data.Count}/{MaxCapacity})");
             }
         }
 

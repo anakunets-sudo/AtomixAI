@@ -84,8 +84,19 @@ namespace AtomixAI.Atomic
         private static object ConvertValue(JToken token, Type targetType)
         {
             if (targetType == typeof(string)) return token.ToString();
-            if (targetType == typeof(double)) return token.Value<double>(); // Здесь можно добавить ParseToRevitFeet
+
+            if (targetType == typeof(double))
+            {
+                // 1. Извлекаем числовое значение из JSON
+                double val = token.Value<double>();
+
+                // 2. Пропускаем через парсер единиц Revit
+                // ИИ прислал "3000" -> Util превратит это в 9.842... (футы)
+                return Util.ParseToRevitFeet(val);
+            }
+
             if (targetType == typeof(bool)) return token.Value<bool>();
+
             if (targetType.IsEnum) return Enum.Parse(targetType, token.ToString(), true);
 
             return token.ToObject(targetType);

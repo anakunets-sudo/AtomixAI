@@ -1,5 +1,6 @@
 ﻿using AtomixAI.Core;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,9 +31,9 @@ namespace AtomixAI.Atomic.Commands
         /// <param name="doc">The Revit document to search in.</param>
         /// <param name="collector">Incoming collector (ignored by initializer).</param>
         /// <returns>A new collector containing all project elements.</returns>
-        public FilteredElementCollector Apply(Document doc, FilteredElementCollector collector)
+        public FilteredElementCollector Apply(UIDocument uidoc, FilteredElementCollector collector)
         {
-            collector = new FilteredElementCollector(doc);
+            collector = new FilteredElementCollector(uidoc.Document);
 
             System.Diagnostics.Debug.WriteLine($"Init ProjectFilterInitializer", this.GetType().Name);
 

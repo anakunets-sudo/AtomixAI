@@ -7,6 +7,7 @@ using System.Linq;
 
 namespace AtomixAI.Atomic.Commands
 {
+    /*
     [AtomicInfo(
         name: "get_context_summary",
         group: AtomicGroupType.Knowledge,
@@ -83,5 +84,5 @@ namespace AtomixAI.Atomic.Commands
                 return new AtomicResult { Success = false, Message = ex.Message };
             }
         }
-    }
+    }*/
 }

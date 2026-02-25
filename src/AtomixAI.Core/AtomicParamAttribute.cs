@@ -10,7 +10,7 @@ namespace AtomixAI.Core
         public string Description { get; }
         public bool IsRequired { get; }
 
-        public AtomicParamAttribute(string description, bool isRequired = true)
+        public AtomicParamAttribute(string description, bool isRequired = false)
         {
             Description = description;
             IsRequired = isRequired;

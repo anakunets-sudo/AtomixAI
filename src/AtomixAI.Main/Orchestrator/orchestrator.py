@@ -16,7 +16,7 @@ import instructions
 
 # --- CONFIGURATION ---
 PIPE_NAME = r'\\.\pipe\AtomixAI_Bridge_Pipe'
-MODEL_NAME = 'qwen2.5:7b'
+MODEL_NAME = 'qwen2.5:7b' # deepseek-r1:8b  qwen2.5:7b
 
 class RevitPipeClient:
     def __init__(self, name):
@@ -64,68 +64,72 @@ def mcp_to_ollama(mcp_tools):
     return ready_tools
 
 def process_ai_logic(user_text, tools, client):
-    """
-    Улучшенная логика: 
-    1. ИИ решает вызвать инструмент.
-    2. Мы выполняем его в Revit.
-    3. Мы возвращаем результат в ИИ.
-    4. ИИ формулирует ответ пользователю.
-    """
+    # Запрос динамического мануала
+    res, _ = client.send_receive({"action": "get_manual"})
+    dynamic_manual = res.get("manual", "No specific instructions.")
+
     messages = [
+        {'role': 'system', 'content': dynamic_manual}, # Наш Reflection-мануал
         {'role': 'system', 'content': instructions.PROFILES["default"]},
         {'role': 'user', 'content': user_text}
     ]
 
-    # --- ШАГ 1: Первичный запрос к модели ---
-    response = ollama.chat(model=MODEL_NAME, messages=messages, tools=tools)
+    # Бесконечный цикл для цепочки вызовов (Chain of Thought)
+    while True:
+        response = ollama.chat( model=MODEL_NAME, messages=messages, tools=tools )
+        
+        if not response.message.tool_calls:
+            return response.message.content
 
-    # --- ШАГ 2: Обработка вызовов инструментов (если есть) ---
-    if response.message.tool_calls:
-        # Добавляем ответ модели (с намерением вызвать инструмент) в историю
         messages.append(response.message)
 
         for call in response.message.tool_calls:
             tool_name = call.function.name
-            args = call.function.arguments if call.function.arguments else {}
+            args = call.function.arguments
             
-            print(f"[Action] Вызываю Revit: {tool_name}({args})")
+            print(f"[Action] Requesting Revit: {tool_name}")
             
-            payload = {
-                "action": "call",
-                "name": tool_name,
-                "arguments": json.dumps(args)
-            }
-            
-            # Отправляем в Revit
+            # 1. Отправляем запрос на выполнение
+            payload = {"action": "call", "name": tool_name, "arguments": json.dumps(args)}
             revit_res, _ = client.send_receive(payload)
-            
-            # Формируем ответ от 'инструмента' для ИИ
-            # Мы берем Success, Message и Data из AtomicResult
-            status = "Success" if revit_res.get("success") else "Error"
-            msg = revit_res.get("message", "No message")
-            data = revit_res.get("data", "")
-            
+
+            # 2. ВАРИАНТ Б: Ждем реального завершения
+            # Если Revit ответил "queued", мы начинаем "пинговать" пайп, 
+            # пока не придет подтверждение выполнения.
+            execution_result = None
+            if revit_res.get("status") == "queued":
+                print(f"[*] Waiting for {tool_name} to finish in Revit...")
+                while True:
+                    # Опрашиваем пайп. Dispatcher должен будет выплюнуть результат в ui_event
+                    # или в основной ответ следующего пинга.
+                    poll_res, ui_event = client.send_receive({"action": "ping"})
+                    
+                    # Ищем в ui_event или ответе признак завершения команды
+                    if ui_event and ui_event.get("action") == "tool_execution_result":
+                        execution_result = ui_event
+                        break
+                    
+                    # Если Dispatcher сразу вернул результат в poll_res (зависит от реализации C#)
+                    if poll_res and poll_res.get("action") == "tool_execution_result":
+                        execution_result = poll_res
+                        break
+                        
+                    time.sleep(0.2)
+
+            # 3. Формируем контекст для ИИ на основе РЕАЛЬНОГО результата
+            status = "SUCCESS" if execution_result.get("success") else "ERROR"
             tool_result_content = (
-                f"STATUS: SUCCESS. COMMAND COMPLETED.\n"
+                f"STATUS: {status}\n"
                 f"Tool: {tool_name}\n"
-                f"Revit_Output: {msg}\n"
-                f"Created_Element_ID: {data}\n"
-                f"IMPORTANT: Respond to the user in RUSSIAN language only."
+                f"Message: {execution_result.get('message')}\n"
+                f"Data: {execution_result.get('data')}\n"
+                f"Output_Alias: {args.get('Out', 'none')}\n"
+                f"INSTRUCTION: Use ONLY the summary for the final report to avoid repetition."
             )
-            print(f"[Revit Context]: {tool_result_content}")
+            
+            print(f"[Revit Context]: {status} - {execution_result.get('message')}")
 
-            # Добавляем результат выполнения в контекст диалога
-            messages.append({
-                'role': 'tool',
-                'content': tool_result_content,
-            })
-
-        # --- ШАГ 3: Финальный проход (ИИ анализирует результаты и отвечает юзеру) ---
-        final_response = ollama.chat(model=MODEL_NAME, messages=messages)
-        return final_response.message.content
-    
-    # Если инструментов не потребовалось
-    return response.message.content
+            messages.append({'role': 'tool', 'content': tool_result_content})
 
 def main():
     client = RevitPipeClient(PIPE_NAME)
