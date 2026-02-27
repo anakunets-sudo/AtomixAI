@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Diagnostics;
-using AtomixAI.Atomic;
+﻿using AtomixAI.Atomic;
+using AtomixAI.Atomic.Commands;
 using AtomixAI.Core;
+using Autodesk.Revit.DB;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Autodesk.Revit.DB;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
 
 namespace AtomixAI.Bridge
 {
@@ -15,16 +16,14 @@ namespace AtomixAI.Bridge
     {
         private readonly Dictionary<string, Type> _csCommands;
         private readonly PyRevitLoader _pyLoader;
-
         private McpHost _mcpHost;
         public void RegisterHost(McpHost host) => _mcpHost = host;
-
         public ToolDispatcher(string scriptsPath)
         {
             _pyLoader = new PyRevitLoader(scriptsPath);
 
             // Сканируем сборку на наличие команд IAtomicCommand
-            _csCommands = Assembly.GetAssembly(typeof(Registry))
+            _csCommands = Assembly.GetAssembly(typeof(AtomicSearchFactory))
                 .GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
                 .ToDictionary(
@@ -35,126 +34,158 @@ namespace AtomixAI.Bridge
 
             Debug.WriteLine($"[DISPATCHER] Initialized. Commands found: {_csCommands.Count}");
         }
-
         public AtomicResult Dispatch(string toolId, string jsonArguments)
         {
             Debug.WriteLine($"\n[DISPATCHER] >>> Processing: {toolId}");
 
             try
             {
-                // 1. Десериализация входных параметров
+                // 1. Поиск типа команды в реестре
+                // ИСПРАВЛЕНО: Добавлена проверка на наличие команды ПЕРЕД созданием инстанса
+                if (!_csCommands.TryGetValue(toolId, out var commandType) || commandType == null)
+                {
+                    string errorMsg = $"Command '{toolId}' not found in registered commands.";
+                    Debug.WriteLine($"[DISPATCHER] !!! {errorMsg}");
+                    return new AtomicResult { Success = false, Message = errorMsg };
+                }
+
+                // 2. Десериализация параметров
                 var parameters = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonArguments)
                                  ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
-                // 2. Поиск команды в реестре
-                if (!_csCommands.TryGetValue(toolId, out var commandType))
+                // Логика 'In' по умолчанию
+                if (!parameters.ContainsKey("In") || string.IsNullOrEmpty(parameters["In"]?.ToString()))
                 {
-                    return new AtomicResult { Success = false, Message = $"Command {toolId} not found." };
+                    parameters["In"] = "_last";
+                    Debug.WriteLine("[DISPATCHER] ℹ 'In' was empty, auto-assigned to '_last'");
                 }
 
-                // 3. Создание инстанса и маппинг In/Out/Params
+                // 3. Создание инстанса команды (теперь безопасно)
                 var instance = (IAtomicCommand)Activator.CreateInstance(commandType);
+
+                // Маппинг свойств из JSON в объект команды
                 MapProperties(instance, parameters);
 
-                // 4. ВЫПОЛНЕНИЕ В ТРАНЗАКЦИИ REVIT
-                // Здесь происходит вся магия: поиск, фильтрация, запись в AtomicStorage
-                AtomicResult result = TransactionManager.ExecuteSafe(toolId, () =>
-                {
+                // 4. ВЫПОЛНЕНИЕ в безопасном контексте транзакций Revit
+                AtomicResult result = TransactionManager.ExecuteSafe(toolId, () => {
                     return instance.Execute(parameters);
                 });
 
-                // 5. ОТПРАВКА ОБРАТНОЙ СВЯЗИ (FEEDBACK) ДЛЯ ORCHESTRATOR.PY
-                if (result != null && _mcpHost != null)
+                // 5. Обработка результатов и хранилища (Storage)
+                if (result != null && result.Success)
                 {
-                    // Формируем спец-пакет, который Python интерпретирует как конец ожидания
+                    string outKey = parameters.ContainsKey("Out") ? parameters["Out"].ToString() : null;
+
+                    // Если команда не реализует BaseAtomicCommand (где логика SetOutput встроена)
+                    // Но мы все равно хотим сохранить результат
+                    if (result.Data != null && !string.IsNullOrEmpty(outKey))
+                    {
+                        AtomicStorage.Set(outKey, result.Data);
+                        Debug.WriteLine($"[DISPATCHER] 💾 New data saved to storage: {outKey}");
+                    }
+                }
+
+                // 6. Отправка обратной связи в Python через McpHost
+                if (_mcpHost != null && result != null)
+                {
                     var feedback = new
                     {
                         action = "tool_execution_result",
                         tool = toolId,
                         success = result.Success,
                         message = result.Message,
-                        data = result.Data // Например, число найденных элементов (10)
+                        data = result.Data
                     };
 
-                    // Сериализуем и кладем в очередь широковещания McpHost
-                    string jsonFeedback = JsonConvert.SerializeObject(feedback);
-                    _mcpHost.BroadcastToClients(jsonFeedback);
-
-                    Debug.WriteLine($"[DISPATCHER] ✓ Feedback queued for Python: {result.Message}");
-                }
-                else if (_mcpHost == null)
-                {
-                    Debug.WriteLine("[DISPATCHER] !!! WARNING: McpHost not registered. Python will hang in wait loop.");
+                    _mcpHost.BroadcastToClients(JsonConvert.SerializeObject(feedback));
+                    Debug.WriteLine($"[DISPATCHER] ✓ Feedback sent to Python: {result.Message}");
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[DISPATCHER] !!! Critical Error: {ex.Message}");
+                Debug.WriteLine($"[DISPATCHER] !!! Critical Error in '{toolId}': {ex.Message}");
                 return new AtomicResult { Success = false, Message = $"Dispatch Error: {ex.Message}" };
             }
         }
-
         private void MapProperties(IAtomicCommand instance, Dictionary<string, object> parameters)
         {
-            var props = instance.GetType().GetProperties();
+            var props = instance.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
             foreach (var prop in props)
             {
-                // Добавь это условие: проверяем, есть ли у свойства SetMethod
                 if (!prop.CanWrite || prop.GetSetMethod() == null) continue;
 
-                // Ищем совпадение имени свойства команды с ключом в JSON
-                if (parameters.TryGetValue(prop.Name, out var val) && val != null)
-                {
-                    try
-                    {
-                        object converted = null;
+                if (!parameters.TryGetValue(prop.Name, out var rawValue) || rawValue == null) continue;
 
-                        // 1. Обработка сложных объектов (фильтры JArray/JObject)
-                        if (val is JToken token)
+                try
+                {
+                    object finalValue = rawValue;
+                    string rawStr = rawValue.ToString();
+                    bool isTag = rawStr.StartsWith("#") || rawStr == "_last";
+                    // 1. ИЗВЛЕЧЕНИЕ ИЗ ХРАНИЛИЩА
+                    if (isTag)
+                    {
+                        var storedData = AtomicStorage.Get(rawStr);
+                        if (storedData != null)
                         {
-                            if (prop.PropertyType == typeof(JArray))
+                            // ВАЖНО: Если свойство — СТРОКА (например, In/Out), нам НЕ НУЖЕН объект.
+                            // Нам нужно оставить само имя тега "#found_walls".
+                            if (prop.PropertyType != typeof(string))
                             {
-                                // Если пришел объект {}, превращаем его в массив [{}]
-                                if (token is JObject obj)
-                                {
-                                    converted = new JArray(obj);
-                                    Debug.WriteLine($"[MAPPER] Auto-wrapped JObject into JArray for {prop.Name}");
-                                }
-                                else
-                                {
-                                    converted = token as JArray ?? JArray.FromObject(token);
-                                }
-                            }
-                            else if (prop.PropertyType == typeof(JObject))
-                            {
-                                converted = token is JObject jObj ? jObj : JObject.FromObject(token);
-                            }
-                            else
-                            {
-                                converted = token.ToObject(prop.PropertyType);
+                                finalValue = storedData;
+                                Debug.WriteLine($"[MAPPER] 📥 Extracted from Storage '{rawStr}': {finalValue.GetType().Name}");
                             }
                         }
-                        // 2. Конвертация единиц измерения Revit (Double/Feet)
-                        else if (prop.PropertyType == typeof(double))
+                    }
+                    // 2. АВТО-УПАКОВКА В КОЛЛЕКЦИЮ
+                    bool propertyIsList = typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType)
+                                         && prop.PropertyType != typeof(string);
+                    bool valueIsList = typeof(System.Collections.IEnumerable).IsAssignableFrom(finalValue.GetType())
+                                      && !(finalValue is string);
+                    if (propertyIsList && !valueIsList)
+                    {
+                        Type elementType = prop.PropertyType.IsGenericType
+                            ? prop.PropertyType.GetGenericArguments()[0]
+                            : typeof(object);
+                        var listType = typeof(List<>).MakeGenericType(elementType);
+                        var newList = (System.Collections.IList)Activator.CreateInstance(listType);
+                        object itemToAdd = elementType.IsAssignableFrom(finalValue.GetType())
+                            ? finalValue
+                            : (finalValue is JToken token ? token.ToObject(elementType) : Convert.ChangeType(finalValue, elementType));
+                        newList.Add(itemToAdd);
+                        finalValue = newList;
+                        Debug.WriteLine($"[MAPPER] 🎁 Auto-wrapped {itemToAdd.GetType().Name} into {prop.PropertyType.Name}");
+                    }
+                    // 3. ТИПИЗАЦИЯ И ПРИСВОЕНИЕ
+                    if (finalValue is JToken jToken)
+                    {
+                        finalValue = jToken.ToObject(prop.PropertyType);
+                    }
+                    else if (prop.PropertyType == typeof(double))
+                    {
+                        finalValue = Util.ParseToRevitFeet(finalValue);
+                    }
+                    // ПРОВЕРКА: Если типы не совпадают и это НЕ строка
+                    else if (!prop.PropertyType.IsAssignableFrom(finalValue.GetType()))
+                    {
+                        // Если свойство ждет строку, а у нас объект (и мы сюда дошли) — берем rawValue (тег)
+                        if (prop.PropertyType == typeof(string))
                         {
-                            converted = Util.ParseToRevitFeet(val);
+                            finalValue = rawValue.ToString();
                         }
-                        // 3. Прямой маппинг строк (In, Out) и базовых типов
                         else
                         {
-                            // Просто конвертируем "walls_1" (string) в свойство In (string)
-                            converted = Convert.ChangeType(val, prop.PropertyType);
+                            finalValue = Convert.ChangeType(finalValue, prop.PropertyType);
                         }
-
-                        prop.SetValue(instance, converted);
-                        Debug.WriteLine($"[MAPPER] Property {prop.Name} set to: {converted}");
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"[MAPPER] !!! Error mapping '{prop.Name}': {ex.Message}");
-                    }
+                    prop.SetValue(instance, finalValue);
+                    Debug.WriteLine($"[MAPPER] Property {prop.Name} set to: {finalValue?.GetType().Name ?? "null"}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[MAPPER] !!! Error mapping '{prop.Name}': {ex.Message}");
                 }
             }
         }

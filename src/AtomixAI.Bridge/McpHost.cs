@@ -167,19 +167,12 @@ namespace AtomixAI.Bridge
                 var request = JObject.Parse(json);
                 string action = request["action"]?.ToString();
 
+                // ИСПРАВЛЕНО: Теперь всегда возвращаем JSON объект для Python
                 if (action == "get_manual")
-                {
-                    // Возвращаем текстовый мануал, собранный через Reflection
-                    return Registry.GetAiManual();
-                }
+                    return JsonConvert.SerializeObject(new { manual = Registry.GetAiManual() });
 
                 if (action == "get_context_state")
-                {
-                    return JsonConvert.SerializeObject(new
-                    {
-                        aliases = Registry.GetActiveContentStateAliases()
-                    });
-                }
+                    return JsonConvert.SerializeObject(new { aliases = Registry.GetActiveContentStateAliases() });
 
                 // НОВЫЙ КЕЙС: Ответ от ИИ для интерфейса
                 if (action == "ui_log")

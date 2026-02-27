@@ -4,59 +4,62 @@ using System.Linq;
 
 namespace AtomixAI.Core
 {
+    internal class StorageSlot
+    {
+        public object Value { get; set; }
+        public HashSet<string> Aliases { get; } = new HashSet<string>();
+    }
+
     public static class AtomicStorage
     {
-        private static readonly Dictionary<string, object> _data = new Dictionary<string, object>();
+        private static readonly Dictionary<string, StorageSlot> _data = new Dictionary<string, StorageSlot>();
         private static readonly List<string> _history = new List<string>();
         private static readonly object _lockObj = new object();
         public static int MaxCapacity { get; set; } = 100;
+        private const string LAST_KEY = "_last";
 
-        public static bool Has(string alias)
+        // --- ТОТ САМЫЙ МЕТОД ДЛЯ TRANSACTION MANAGER ---
+        public static string[] GetCurrentContext()
         {
             lock (_lockObj)
             {
-                bool exists = !string.IsNullOrEmpty(alias) && _data.ContainsKey(alias);
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Has] '{alias}': {exists}");
-                return exists;
+                // Возвращаем все ключи (алиасы), которые сейчас есть в словаре
+                return _data.Keys.ToArray();
             }
         }
 
         public static void Set(string alias, object value)
         {
+            if (string.IsNullOrWhiteSpace(alias) || alias.Equals("none", StringComparison.OrdinalIgnoreCase)) return;
+            if (value == null) { Remove(alias); return; }
+
             lock (_lockObj)
             {
-                // 1. Фильтр системных имен (Твой код)
-                if (string.IsNullOrWhiteSpace(alias) || alias.Equals("none", StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
+                if (_data.TryGetValue(alias, out var oldSlot)) oldSlot.Aliases.Remove(alias);
 
-                // 2. Обработка удаления через null (Предохранитель для catch)
-                if (value == null)
-                {
-                    Remove(alias); // Если команда упала, алиас "сгорает" и удаляется из истории
-                    return;
-                }
+                var newSlot = new StorageSlot { Value = value };
+                newSlot.Aliases.Add(alias);
+                newSlot.Aliases.Add(LAST_KEY);
 
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Set] ⇒ '{alias}' ({value.GetType().Name})");
+                _data[alias] = newSlot;
+                _data[LAST_KEY] = newSlot;
 
-                // 3. Обновление истории (делаем ключ "свежим")
-                if (_data.ContainsKey(alias))
-                {
-                    _history.Remove(alias);
-                }
-                // 4. Контроль переполнения памяти
-                else if (_history.Count >= MaxCapacity)
-                {
-                    var oldest = _history[0];
-                    _history.RemoveAt(0);
-                    _data.Remove(oldest);
-                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage] Лимит достигнут. Удален старый алиас: {oldest}");
-                }
+                UpdateHistory(alias);
+                CheckCapacity();
+            }
+        }
 
-                // 5. Сохранение
-                _history.Add(alias);
-                _data[alias] = value;
+        public static void Link(string sourceAlias, string targetAlias)
+        {
+            if (string.IsNullOrEmpty(targetAlias) || sourceAlias == targetAlias) return;
+            lock (_lockObj)
+            {
+                if (_data.TryGetValue(sourceAlias, out var slot))
+                {
+                    slot.Aliases.Add(targetAlias);
+                    _data[targetAlias] = slot;
+                    UpdateHistory(targetAlias);
+                }
             }
         }
 
@@ -64,53 +67,46 @@ namespace AtomixAI.Core
         {
             lock (_lockObj)
             {
-                bool found = _data.TryGetValue(alias, out var val);
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Get] '{alias}': {(found ? "✓ НАЙДЕНО" : "✗ НЕ НАЙДЕНО")}");
-                return val;
+                return _data.TryGetValue(alias, out var slot) ? slot.Value : null;
             }
         }
 
         public static T Get<T>(string alias)
         {
             var val = Get(alias);
-            return val is T ? (T)val : default(T);
+            return val is T ? (T)val : default;
         }
 
         public static void Remove(string alias)
         {
             lock (_lockObj)
             {
-                if (_data.Remove(alias))
+                if (_data.TryGetValue(alias, out var slot))
                 {
-                    _history.Remove(alias);
-                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Remove] ✓ '{alias}' удалён");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Remove] ✗ '{alias}' не найден для удаления");
+                    foreach (var linkedName in slot.Aliases.ToList())
+                    {
+                        _data.Remove(linkedName);
+                        _history.Remove(linkedName);
+                    }
+                    slot.Value = null;
                 }
             }
         }
 
-        public static string[] GetCurrentContext()
+        private static void UpdateHistory(string alias)
         {
-            lock (_lockObj)
-            {
-                var result = _history.ToArray();
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.GetCurrentContext] {result.Length} элементов: {string.Join(", ", result.Take(5))}...");
-                return result;
-            }
+            _history.Remove(alias);
+            _history.Add(alias);
+        }
+
+        private static void CheckCapacity()
+        {
+            while (_history.Count > MaxCapacity) Remove(_history[0]);
         }
 
         public static void Clear()
         {
-            lock (_lockObj)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AtomicStorage.Clear] Очистка {_data.Count} элементов");
-                _data.Clear();
-                _history.Clear();
-                System.Diagnostics.Debug.WriteLine("[AtomicStorage.Clear] ✓ Очищено");
-            }
+            lock (_lockObj) { _data.Clear(); _history.Clear(); }
         }
     }
 }

@@ -16,12 +16,12 @@ namespace AtomixAI.Atomic.Commands
     [AtomicInfo(
     name: "search_elements",
     group: AtomicGroupType.Search,
-    description: "Complex element search using a pipeline of filters (Category, Level, Parameter, etc.",
-    keywords: new[] { "search", "how many", "which" })]
+    description: "Complex element search using a pipeline of filters (Category, Level, Parameter, etc.). Use the command to search for elements when asking find, search, or how many.",
+    keywords: new[] { "search", "how many", "find" })]
     public class SearchElementCmd : BaseAtomicCommand,  IAtomicCommandSearch
     {
-        [AtomicParam("Array of filters. 1st: Scope, 2nd: Category.", isRequired: true)]
-        public JArray Filters { get; set; }
+        [AtomicParam("List of search filters. Format: [{ 'Kind': 'Category', 'CategoryName': 'OST_Walls' }, { 'Kind': 'Level', 'LevelName': 'Level 1' }]")]
+        public List<Dictionary<string, object>> Filters { get; set; }
 
         protected override AtomicResult Execute(ITransactionHandler handler)
         {
@@ -51,7 +51,7 @@ namespace AtomixAI.Atomic.Commands
                 return SetOutput(null, true); //false если ошибка если оборавать код, иначе он продолжится в цепочке
             }
 
-            return SetOutput(elementIds, true, $"Found {elementIds.Count} elements. Stored in '{Out}'.");
+            return SetOutput(elementIds, elementIds.Count, true, $"Found {elementIds.Count} elements. Stored in '{Out}'.");
         }
     }
 }

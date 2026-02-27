@@ -78,7 +78,7 @@ def main():
                         print(f"[DEBUG] Распознано: {text}")
                         # Отправляем в Revit через Named Pipe
                         try:
-                            win32file.WriteFile(handle, (text + "\n").encode('utf-8'))
+                            win32file.WriteFile(handle, (text + " \n").encode('utf-8'))
                         except Exception as e:
                             print(f"[ERROR] Ошибка отправки в Pipe: {e}")
                     

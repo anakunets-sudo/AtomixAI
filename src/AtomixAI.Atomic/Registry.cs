@@ -1,6 +1,7 @@
 ﻿using AtomixAI.Core;
 using Newtonsoft.Json;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -14,8 +15,8 @@ namespace AtomixAI.Atomic
         {
             var tools = new List<object>();
 
-            // 1. Находим все команды, реализующие IAtomicCommand (включая базовый класс)
-            var commandTypes = Assembly.GetAssembly(typeof(Registry))
+            // 1. Находим все команды, реализующие IAtomicCommand
+            var commandTypes = Assembly.GetAssembly(typeof(AtomicSearchFactory))
                 .GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
 
@@ -27,31 +28,55 @@ namespace AtomixAI.Atomic
                 var propertiesSchema = new Dictionary<string, object>();
                 var requiredParams = new List<string>();
 
-                // 2. Сканируем свойства С УЧЕТОМ НАСЛЕДОВАНИЯ
-                // GetProperties() по умолчанию берет публичные свойства всей иерархии
                 foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 {
-                    // КЛЮЧЕВОЙ МОМЕНТ: Ищем атрибут вверх по дереву наследования (третий параметр true)
                     var paramAttr = Attribute.GetCustomAttribute(prop, typeof(AtomicParamAttribute), true) as AtomicParamAttribute;
-
                     if (paramAttr == null) continue;
 
-                    // Описываем тип и описание для LLM
-                    propertiesSchema[prop.Name] = new
-                    {
-                        type = GetJsonType(prop.PropertyType),
-                        description = paramAttr.Description +
-                                     (prop.PropertyType == typeof(double) ? " (Specify units, e.g. '500mm' or '10ft')" : "")
-                    };
+                    string extraHint = "";
+                    if (prop.Name == "In") extraHint = " (Use '#tag' or '_last')";
+                    else if (prop.Name == "Out") extraHint = " (Create new '#tag')";
 
-                    // 3. Добавляем в список обязательных ТОЛЬКО если флаг IsRequired в атрибуте равен true
-                    if (paramAttr.IsRequired)
+                    // ОПРЕДЕЛЕНИЕ ТИПА (С поддержкой JSON Schema / Gemini)
+                    var propType = prop.PropertyType;
+                    string jsonType = GetJsonType(propType);
+
+                    // Создаем структуру параметра
+                    var propDef = new Dictionary<string, object>
+            {
+                { "type", jsonType },
+                { "description", paramAttr.Description + extraHint +
+                  (propType == typeof(double) ? " (Specify units, e.g. '500mm')" : "") }
+            };
+
+                    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем 'items' для массивов
+                    if (jsonType == "array")
                     {
-                        requiredParams.Add(prop.Name);
+                        Type elementType = typeof(string);
+                        if (propType.IsArray) elementType = propType.GetElementType();
+                        else if (propType.IsGenericType) elementType = propType.GetGenericArguments().FirstOrDefault() ?? typeof(string);
+
+                        // If the array contains a DICTIONARY (as in our factory)
+                        if (typeof(System.Collections.IDictionary).IsAssignableFrom(elementType) || elementType == typeof(object))
+                        {
+                            propDef["items"] = new
+                            {
+                                type = "object",
+                                properties = new { } // Gemini accepts an empty object if the type object is specified
+                            };
+                        }
+                        else
+                        {
+                            propDef["items"] = new { type = GetJsonType(elementType) };
+                        }
                     }
+
+                    propertiesSchema[prop.Name] = propDef;
+
+                    if (paramAttr.IsRequired)
+                        requiredParams.Add(prop.Name);
                 }
 
-                // 4. Формируем структуру инструмента (совместимо с MCP / OpenAI Function Calling)
                 tools.Add(new
                 {
                     name = info.Name,
@@ -65,21 +90,23 @@ namespace AtomixAI.Atomic
                 });
             }
 
-            // Возвращаем упакованный JSON для Python-моста
             return JsonConvert.SerializeObject(new { tools });
         }
 
+        // Вспомогательный метод для маппинга типов
         private static string GetJsonType(Type type)
         {
-            if (type == typeof(int) || type == typeof(double) || type == typeof(float))
+            if (type == typeof(int) || type == typeof(double) || type == typeof(float) || type == typeof(decimal))
                 return "number";
             if (type == typeof(bool))
                 return "boolean";
-            if (type.IsArray || typeof(System.Collections.IEnumerable).IsAssignableFrom(type) && type != typeof(string))
+            // Проверка на коллекцию (но не строку)
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(type) && type != typeof(string))
                 return "array";
 
             return "string";
         }
+
 
         /// <summary>
         /// Собираем все классы и отдаем в инструкцию в orchestrator.py
@@ -109,6 +136,7 @@ namespace AtomixAI.Atomic
                     })
                     .Where(x => x.Attr != null);
 
+                sb.AppendLine("  Usage: Use '#tag_name' to pass data between tools. '#' denotes a memory reference.");
                 sb.Append("  Parameters: ");
                 // ИСПРАВЛЕНО: используем x.Attr.IsRequired для выделения жирным
                 sb.AppendLine(string.Join(", ", props.Select(x => x.Attr.IsRequired ? $"**{x.Name}**" : x.Name)));
@@ -116,7 +144,6 @@ namespace AtomixAI.Atomic
             }
             return sb.ToString();
         }
-
 
         public static string GetActiveContentStateAliases()
         {

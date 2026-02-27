@@ -8,31 +8,41 @@ namespace AtomixAI.Core
     {
         public static Func<string, ITransactionHandler>? TransactionFactory { get; set; }
 
-        // Храним текущий хендлер для доступа из команд 
         [ThreadStatic]
         private static ITransactionHandler? _currentHandler;
-
         public static ITransactionHandler? CurrentHandler => _currentHandler;
 
         public static AtomicResult ExecuteSafe(string name, Func<AtomicResult> action)
         {
-            if (TransactionFactory == null) return new AtomicResult { Success = false };
+            if (TransactionFactory == null) return new AtomicResult { Success = false, Message = "TransactionFactory not initialized" };
+
+            // 1. ЗАПОМИНАЕМ СОСТОЯНИЕ (Snapshot)
+            // Фиксируем список ключей до начала выполнения команды
+            var storageSnapshot = AtomicStorage.GetCurrentContext();
 
             using (_currentHandler = TransactionFactory(name))
             {
                 try
                 {
-                    // Выполняем и сохраняем результат команды!
                     var result = action();
 
-                    if (result.Success) _currentHandler.Assimilate();
-                    else _currentHandler.Rollback();
+                    if (result != null && result.Success)
+                    {
+                        _currentHandler.Assimilate(); // Фиксация в Revit
+                    }
+                    else
+                    {
+                        _currentHandler.Rollback();  // Откат в Revit
+                        RollbackStorage(storageSnapshot); // ОТКАТ В ПАМЯТИ
+                    }
 
                     return result;
                 }
                 catch (Exception ex)
                 {
                     _currentHandler.Rollback();
+                    RollbackStorage(storageSnapshot); // ОТКАТ В ПАМЯТИ при краше
+
                     Debug.WriteLine($"[TransactionManager] Rollback due to: {ex.Message}");
                     return new AtomicResult { Success = false, Message = ex.Message };
                 }
@@ -40,30 +50,36 @@ namespace AtomixAI.Core
             }
         }
 
-
-        public static AtomicResult ExecuteSafe(string name, Action action)
+        /// <summary>
+        /// Удаляет из хранилища все ключи, которые появились в процессе выполнения неудачной команды.
+        /// </summary>
+        private static void RollbackStorage(string[] snapshot)
         {
-            if (TransactionFactory == null)
-                return new AtomicResult { Success = false };
-
-            using (_currentHandler = TransactionFactory(name))
+            try
             {
-                try
+                var currentKeys = AtomicStorage.GetCurrentContext();
+                // Находим ключи, которых не было в снимке (новые "грязные" данные)
+                var dirtyKeys = currentKeys.Except(snapshot).ToList();
+
+                foreach (var key in dirtyKeys)
                 {
-                    action();
-                    _currentHandler.Assimilate();
-                    return new AtomicResult { Success = true };
-                }
-                catch (Exception ex)
-                {
-                    _currentHandler.Rollback();
-                    throw; // Пробрасываем выше для Dispatcher 
-                }
-                finally
-                {
-                    _currentHandler = null;
+                    AtomicStorage.Remove(key);
+                    Debug.WriteLine($"[TransactionManager] Storage Rollback: Removed dirty key '{key}'");
                 }
             }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[TransactionManager] Critical error during Storage Rollback: {ex.Message}");
+            }
+        }
+
+        // Перегрузка для простых Action (также с защитой данных)
+        public static AtomicResult ExecuteSafe(string name, Action action)
+        {
+            return ExecuteSafe(name, () => {
+                action();
+                return new AtomicResult { Success = true };
+            });
         }
     }
 }

@@ -17,13 +17,11 @@ namespace AtomixAI.Atomic.Commands
     [AtomicInfo(
     name: "select_except",
     group: AtomicGroupType.Search,
-    description: "PHYSICAL ACTION: Highlights elements in the Revit UI excluding elements by the Exclude alias. " +
-                  "IMPORTANT: This tool does NOT search. It ONLY takes an existing alias " +
-                  "from 'search_elements' and makes it visible/selected for the user.",
+    description: "PHYSICAL ACTION: Highlights elements in the Revit UI excluding elements by the Exclude tag. Not used as a first command. IMPORTANT: This tool does NOT search. It ONLY takes an existing tag from the previous command and makes it visible/selected for the user.",
     keywords: new[] { "select", "exclude" })]
     public class SelectExceptCmd : BaseAtomicCommand,  IAtomicCommand
     {
-        [AtomicParam("OUTPUT_PORT: Creates a new data alias containing ElementId to exclude. This alias is used to select the ElementId to exclude from the selection.")]
+        [AtomicParam("OUTPUT_PORT: Creates a new data tag containing ElementId to exclude. This tag is used to select the ElementId to exclude from the selection.")]
         public string Exclude { get; set; }
 
         protected override AtomicResult Execute(ITransactionHandler handler)

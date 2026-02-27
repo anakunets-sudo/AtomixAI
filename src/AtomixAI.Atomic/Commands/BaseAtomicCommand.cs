@@ -11,146 +11,115 @@ using System.Threading.Tasks;
 
 namespace AtomixAI.Atomic.Commands
 {
-
     public abstract class BaseAtomicCommand : IAtomicCommand
     {
         [AtomicParam("Unique command name.")]
-        public string CommandId => this.GetType().GetCustomAttribute<AtomixAI.Core.AtomicInfoAttribute>()?.Name;
+        public string CommandId => this.GetType().GetCustomAttribute<AtomicInfoAttribute>()?.Name;
 
-        [AtomicParam("INPUT_PORT: Accepts a data alias from a previous step's OUTPUT_PORT. " +
-             "If you need to act on elements, this parameter MUST be connected to an existing alias.")]
-        public string In { get; set; }
+        [AtomicParam("INPUT_PORT: Accepts a data tag. Defaults to '_last'.")]
+        public string In { get; set; } = "_last";
 
-        [AtomicParam("OUTPUT_PORT: Creates a new data alias containing the results of this tool. " +
-             "This alias can be used by any subsequent tool's INPUT_PORT.")]
+        [AtomicParam("OUTPUT_PORT: Creates a new data tag.")]
         public string Out { get; set; }
-        private static AtomicResult Ok() => new AtomicResult { Success = true };
 
-        // --- ВХОД (ДАННЫЕ ИЗ СКЛАДА ДЛЯ C#) ---
+        // --- ВХОД (ДАННЫЕ ИЗ ХРАНИЛИЩА) ---
         protected AtomicResult GetInput<T>(out T value)
         {
             value = default;
+            string activeIn = string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase)
+                ? "_last" : In;
 
-            // 1. Если In пуст или "none" — это режим "с нуля"
-            if (string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase))
-            {
-                return Ok();
-            }
+            var rawData = AtomicStorage.Get(activeIn);
 
-            // 2. Пытаемся извлечь данные из хранилища
-            var rawData = AtomicStorage.Get(In);
-
-            // 3. Проверка на "Разрыв цепи" (если алиас пуст или сгорел)
             if (rawData == null)
-            {
-                return new AtomicResult
-                {
-                    Success = false,
-                    Message = $"Chain broken: Alias '{In}' is empty or does not exist. Previous step failed?"
-                };
-            }
+                return AtomicResult.Error($"Chain broken: Tag '{activeIn}' is empty.");
 
-            // 4. Проверка типа (Safe Cast)
             if (rawData is T typedData)
             {
                 value = typedData;
-                return Ok();
+                return AtomicResult.Ok();
             }
 
-            // 5. Ошибка несоответствия типов
-            return new AtomicResult
-            {
-                Success = false,
-                Message = $"Type mismatch: Alias '{In}' contains {rawData.GetType().Name}, but {typeof(T).Name} is required."
-            };
+            return AtomicResult.Error($"Type mismatch: Tag '{activeIn}' is {rawData.GetType().Name}, expected {typeof(T).Name}.");
         }
 
         // --- ВЫХОД (СОХРАНЕНИЕ И ОТЧЕТ ДЛЯ ИИ) ---
 
-        // Вариант 1: Автоматический (для списков, ID и т.д.)
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="storageValue"></param>
-        /// <param name="success">false если ошибка если оборавать код, иначе он продолжится в цепочке</param>
-        /// <param name="message"></param>
-        /// <returns></returns>
+        // Вариант 1: Автоматический
         protected AtomicResult SetOutput(object storageValue, bool success, string message = null)
         {
             return SetOutput<object>(storageValue, null, success, message);
         }
 
-        // Вариант 2: Явный (когда нужно показать ИИ кастомный объект/анонимный класс)
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <typeparam name="TData"></typeparam>
-        /// <param name="storageValue"></param>
-        /// <param name="dataOverride"></param>
-        /// <param name="success">false если ошибка если оборавать код, иначе он продолжится в цепочке</param>
-        /// <param name="message"></param>
-        /// <returns></returns>
+        // Вариант 2: Явный (с dataOverride для ИИ)
         protected AtomicResult SetOutput<TData>(object storageValue, TData dataOverride, bool success, string message = null)
         {
-            // 1. Определяем, что увидит ИИ
-            object? finalDataForAi = dataOverride != null ? (object)dataOverride : ExtractData(storageValue);
+            // 1. ПОДГОТОВКА ДАННЫХ ДЛЯ ИИ (Result.Data)
+            // ИИ должен видеть "4", а не список ID.
+            object finalDataForAi = dataOverride != null ? (object)dataOverride : ExtractData(storageValue);
 
-            // 2. Работа с хранилищем
+            // 2. РАБОТА С ХРАНИЛИЩЕМ (AtomicStorage)
             if (!string.IsNullOrWhiteSpace(Out) && !Out.Equals("none", StringComparison.OrdinalIgnoreCase))
             {
-                bool isEmpty = storageValue == null || (storageValue is System.Collections.ICollection col && col.Count == 0);
-
-                if (isEmpty || !success) // Если успех false - тоже сжигаем алиас, данные "отравлены"
+                if (!success)
                 {
-                    AtomicStorage.Set(Out, null);
-                    finalDataForAi = 0;
+                    AtomicStorage.Remove(Out); // Ошибка — сжигаем тег
+                }
+                else if (storageValue == null)
+                {
+                    // РЕЖИМ LINK: Если команда (Select) не меняла данные, просто создаем ссылку
+                    AtomicStorage.Link(In, Out);
+                    // Для ИИ берем данные из первоисточника (In)
+                    finalDataForAi = ExtractData(AtomicStorage.Get(In));
                 }
                 else
                 {
+                    // РЕЖИМ SET: В хранилище ВСЕГДА кладем ОРИГИНАЛ (storageValue), а не число!
                     AtomicStorage.Set(Out, storageValue);
                 }
             }
 
+            // Возвращаем результат, где Data — это число для ИИ, а в Storage уже лежит список
             return new AtomicResult
             {
-                Success = success, // Вот здесь твой контроль!
+                Success = success,
                 Data = finalDataForAi,
                 Message = message ?? (success ? "Success" : "Operation failed")
             };
         }
 
-        // Вспомогательный метод: превращает тяжелые объекты Revit в легкие данные для ИИ
         private object ExtractData(object value)
         {
             if (value == null) return 0;
             if (value is System.Collections.ICollection col) return col.Count;
+            if (value is ElementId id)
+            {
 #if REVIT2024_OR_GREATER
-            if (value is ElementId id) return id.Value;
+                return id.Value.ToString();
 #else
-            if (value is ElementId id) return id.IntegerValue; // Для новых версий Revit: id.Value.ToString()
+                return id.IntegerValue;
 #endif
+            }
             return value;
         }
 
-        // --- ИСПОЛНЕНИЕ (ENTRY POINT) ---
         public AtomicResult Execute(Dictionary<string, object> parameters)
         {
             try
             {
                 var handler = TransactionManager.CurrentHandler;
                 if (handler?.UIDoc?.Document == null)
-                    return new AtomicResult { Success = false, Message = "No active Revit document found." };
+                    return AtomicResult.Error("No active Revit document found.");
 
                 return Execute(handler);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[{this.GetType().Name}] Failed: {ex.Message}");
-                return new AtomicResult { Success = false, Message = ex.Message };
+                return AtomicResult.Error(ex.Message);
             }
         }
 
-        // Абстрактный метод, который будут переопределять все твои 100+ команд
         protected abstract AtomicResult Execute(ITransactionHandler handler);
     }
 }

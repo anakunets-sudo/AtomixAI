@@ -54,7 +54,7 @@ namespace AtomixAI.Atomic.Commands
 
             Debug.WriteLine($"[WallCreateCmd] Финальная проверка перед возвратом. ID: {createdWallId}");
 
-            return SetOutput(createdWallId, true, "1 wall created successfully.");
+            return SetOutput(createdWallId, 1, true, "1 wall created successfully.");
         }
     }
 }
