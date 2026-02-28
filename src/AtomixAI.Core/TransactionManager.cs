@@ -1,4 +1,5 @@
 ﻿using AtomixAI.Core;
+using Autodesk.Revit.DB;
 using System;
 using System.Diagnostics;
 
@@ -12,39 +13,55 @@ namespace AtomixAI.Core
         private static ITransactionHandler? _currentHandler;
         public static ITransactionHandler? CurrentHandler => _currentHandler;
 
+        public static AtomicResult ExecuteSequence(string name, Func<List<AtomicResult>> sequenceAction)
+        {
+            var snapshot = AtomicStorage.GetCurrentContext();
+
+            // Создаем локальную ссылку на хендлер
+            using (var handler = TransactionFactory?.Invoke(name))
+            {
+                if (handler == null) return AtomicResult.Error("Factory not initialized");
+
+                _currentHandler = handler; // Даем доступ командам внутри
+                try
+                {
+                    var results = sequenceAction();
+
+                    if (results.Any(r => !r.Success))
+                    {
+                        handler.Rollback(); // Вызываем у локальной переменной
+                        RollbackStorage(snapshot);
+                        return AtomicResult.Error("Sequence failed.");
+                    }
+
+                    handler.Assimilate();
+                    return AtomicResult.Ok();
+                }
+                finally
+                {
+                    _currentHandler = null; // Чистим статику только в самом конце батча
+                }
+            }
+        }
+
         public static AtomicResult ExecuteSafe(string name, Func<AtomicResult> action)
         {
-            if (TransactionFactory == null) return new AtomicResult { Success = false, Message = "TransactionFactory not initialized" };
-
-            // 1. ЗАПОМИНАЕМ СОСТОЯНИЕ (Snapshot)
-            // Фиксируем список ключей до начала выполнения команды
-            var storageSnapshot = AtomicStorage.GetCurrentContext();
-
-            using (_currentHandler = TransactionFactory(name))
+            // Если мы уже внутри ExecuteSequence, просто выполняем действие
+            if (_currentHandler != null)
             {
+                return action();
+            }
+
+            // Если это одиночный вызов — создаем новый хендлер
+            using (var handler = TransactionFactory?.Invoke(name))
+            {
+                _currentHandler = handler;
                 try
                 {
                     var result = action();
-
-                    if (result != null && result.Success)
-                    {
-                        _currentHandler.Assimilate(); // Фиксация в Revit
-                    }
-                    else
-                    {
-                        _currentHandler.Rollback();  // Откат в Revit
-                        RollbackStorage(storageSnapshot); // ОТКАТ В ПАМЯТИ
-                    }
-
+                    if (result != null && result.Success) handler.Assimilate();
+                    else handler.Rollback();
                     return result;
-                }
-                catch (Exception ex)
-                {
-                    _currentHandler.Rollback();
-                    RollbackStorage(storageSnapshot); // ОТКАТ В ПАМЯТИ при краше
-
-                    Debug.WriteLine($"[TransactionManager] Rollback due to: {ex.Message}");
-                    return new AtomicResult { Success = false, Message = ex.Message };
                 }
                 finally { _currentHandler = null; }
             }

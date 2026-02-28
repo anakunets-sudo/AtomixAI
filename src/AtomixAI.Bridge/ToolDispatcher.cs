@@ -34,6 +34,55 @@ namespace AtomixAI.Bridge
 
             Debug.WriteLine($"[DISPATCHER] Initialized. Commands found: {_csCommands.Count}");
         }
+
+        public AtomicResult DispatchSequence(string jsonSequence)
+        {
+            Debug.WriteLine("[DISPATCHER] >>> Processing Sequence Batch");
+
+            try
+            {
+                // Парсим массив команд из JSON
+                var steps = JsonConvert.DeserializeObject<List<SequenceStep>>(jsonSequence);
+                if (steps == null || steps.Count == 0)
+                    return AtomicResult.Error("Empty sequence received.");
+
+                // Запускаем через наш новый метод в TransactionManager
+                return TransactionManager.ExecuteSequence("AtomixAI AI-Plan", () =>
+                {
+                    var results = new List<AtomicResult>();
+
+                    foreach (var step in steps)
+                    {
+                        // Для каждого шага вызываем существующий метод Dispatch
+                        // Но нам нужно передать аргументы как строку JSON, как того ожидает Dispatch
+                        string argsJson = JsonConvert.SerializeObject(step.Arguments);
+
+                        var stepResult = Dispatch(step.Tool, argsJson);
+                        results.Add(stepResult);
+
+                        // Если шаг не удался — прерываем выполнение цепочки немедленно
+                        if (!stepResult.Success) break;
+                    }
+
+                    return results;
+                });
+            }
+            catch (Exception ex)
+            {
+                return AtomicResult.Error($"Sequence Dispatch Error: {ex.Message}");
+            }
+        }
+
+        // Вспомогательный класс для десериализации (можно положить в конец файла)
+        public class SequenceStep
+        {
+            [JsonProperty("name")]
+            public string Tool { get; set; }
+
+            [JsonProperty("arguments")]
+            public Dictionary<string, object> Arguments { get; set; }
+        }
+        
         public AtomicResult Dispatch(string toolId, string jsonArguments)
         {
             Debug.WriteLine($"\n[DISPATCHER] >>> Processing: {toolId}");
@@ -70,7 +119,7 @@ namespace AtomixAI.Bridge
                 AtomicResult result = TransactionManager.ExecuteSafe(toolId, () => {
                     return instance.Execute(parameters);
                 });
-
+                /*
                 // 5. Обработка результатов и хранилища (Storage)
                 if (result != null && result.Success)
                 {
@@ -83,7 +132,7 @@ namespace AtomixAI.Bridge
                         AtomicStorage.Set(outKey, result.Data);
                         Debug.WriteLine($"[DISPATCHER] 💾 New data saved to storage: {outKey}");
                     }
-                }
+                }*/
 
                 // 6. Отправка обратной связи в Python через McpHost
                 if (_mcpHost != null && result != null)
@@ -109,79 +158,42 @@ namespace AtomixAI.Bridge
                 return new AtomicResult { Success = false, Message = $"Dispatch Error: {ex.Message}" };
             }
         }
+
         private void MapProperties(IAtomicCommand instance, Dictionary<string, object> parameters)
         {
             var props = instance.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
             foreach (var prop in props)
             {
+                // Пропускаем свойства без сеттера или отсутствующие в запросе
                 if (!prop.CanWrite || prop.GetSetMethod() == null) continue;
-
                 if (!parameters.TryGetValue(prop.Name, out var rawValue) || rawValue == null) continue;
 
                 try
                 {
                     object finalValue = rawValue;
-                    string rawStr = rawValue.ToString();
-                    bool isTag = rawStr.StartsWith("#") || rawStr == "_last";
-                    // 1. ИЗВЛЕЧЕНИЕ ИЗ ХРАНИЛИЩА
-                    if (isTag)
-                    {
-                        var storedData = AtomicStorage.Get(rawStr);
-                        if (storedData != null)
-                        {
-                            // ВАЖНО: Если свойство — СТРОКА (например, In/Out), нам НЕ НУЖЕН объект.
-                            // Нам нужно оставить само имя тега "#found_walls".
-                            if (prop.PropertyType != typeof(string))
-                            {
-                                finalValue = storedData;
-                                Debug.WriteLine($"[MAPPER] 📥 Extracted from Storage '{rawStr}': {finalValue.GetType().Name}");
-                            }
-                        }
-                    }
-                    // 2. АВТО-УПАКОВКА В КОЛЛЕКЦИЮ
-                    bool propertyIsList = typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType)
-                                         && prop.PropertyType != typeof(string);
-                    bool valueIsList = typeof(System.Collections.IEnumerable).IsAssignableFrom(finalValue.GetType())
-                                      && !(finalValue is string);
-                    if (propertyIsList && !valueIsList)
-                    {
-                        Type elementType = prop.PropertyType.IsGenericType
-                            ? prop.PropertyType.GetGenericArguments()[0]
-                            : typeof(object);
-                        var listType = typeof(List<>).MakeGenericType(elementType);
-                        var newList = (System.Collections.IList)Activator.CreateInstance(listType);
-                        object itemToAdd = elementType.IsAssignableFrom(finalValue.GetType())
-                            ? finalValue
-                            : (finalValue is JToken token ? token.ToObject(elementType) : Convert.ChangeType(finalValue, elementType));
-                        newList.Add(itemToAdd);
-                        finalValue = newList;
-                        Debug.WriteLine($"[MAPPER] 🎁 Auto-wrapped {itemToAdd.GetType().Name} into {prop.PropertyType.Name}");
-                    }
-                    // 3. ТИПИЗАЦИЯ И ПРИСВОЕНИЕ
+
+                    // 1. КОНВЕРТАЦИЯ ТИПОВ (JToken -> C# Type)
                     if (finalValue is JToken jToken)
                     {
                         finalValue = jToken.ToObject(prop.PropertyType);
                     }
-                    else if (prop.PropertyType == typeof(double))
+
+                    // 2. ОБРАБОТКА ЕДИНИЦ (Только для double)
+                    if (prop.PropertyType == typeof(double))
                     {
+                        // Используем ваш Util для перевода "500mm" -> 1.6404 (feet)
                         finalValue = Util.ParseToRevitFeet(finalValue);
                     }
-                    // ПРОВЕРКА: Если типы не совпадают и это НЕ строка
+
+                    // 3. ПРИВЕДЕНИЕ ТИПОВ (Для простых типов)
                     else if (!prop.PropertyType.IsAssignableFrom(finalValue.GetType()))
                     {
-                        // Если свойство ждет строку, а у нас объект (и мы сюда дошли) — берем rawValue (тег)
-                        if (prop.PropertyType == typeof(string))
-                        {
-                            finalValue = rawValue.ToString();
-                        }
-                        else
-                        {
-                            finalValue = Convert.ChangeType(finalValue, prop.PropertyType);
-                        }
+                        finalValue = Convert.ChangeType(finalValue, prop.PropertyType);
                     }
+
                     prop.SetValue(instance, finalValue);
-                    Debug.WriteLine($"[MAPPER] Property {prop.Name} set to: {finalValue?.GetType().Name ?? "null"}");
+                    // Debug.WriteLine($"[MAPPER] Property {prop.Name} set to: {finalValue}");
                 }
                 catch (Exception ex)
                 {

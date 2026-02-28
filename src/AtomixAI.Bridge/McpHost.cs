@@ -202,14 +202,48 @@ namespace AtomixAI.Bridge
                     }
                 }
 
+                // НОВЫЙ КЕЙС: Выполнение цепочки команд (Sequence)
+                if (action == "call_batch")
+                {
+                    var sequence = request["sequence"]; // Ожидаем массив объектов {name, arguments}
+                    if (sequence != null && sequence.HasValues)
+                    {
+                        string sequenceJson = sequence.ToString();
+
+                        lock (_commandQueue)
+                        {
+                            // Используем префикс-маркер или специальный ID, 
+                            // чтобы ToolDispatcher понял: это не одна команда, а пакет.
+                            _commandQueue.Enqueue(("__BATCH__", sequenceJson));
+                        }
+
+                        _externalEvent.Raise();
+                        return JsonConvert.SerializeObject(new { status = "batch_queued", count = sequence.Count() });
+                    }
+                    return JsonConvert.SerializeObject(new { error = "Empty or invalid sequence" });
+                }
+
+                // Одиночный вызов (обратная совместимость)
+                else if (action == "call")
+                {
+                    string toolName = request["name"]?.ToString();
+                    string args = request["arguments"]?.ToString();
+
+                    if (!string.IsNullOrEmpty(toolName))
+                    {
+                        lock (_commandQueue) { _commandQueue.Enqueue((toolName, args)); }
+                        _externalEvent.Raise();
+                        return JsonConvert.SerializeObject(new { status = "queued", tool = toolName });
+                    }
+                }
+
                 return JsonConvert.SerializeObject(new { status = "ok" });
             }
             catch (Exception ex)
             {
-                return JsonConvert.SerializeObject(new { error = $"Processing Error: {ex.Message}" });
+                return JsonConvert.SerializeObject(new { error = $"McpHost Error: {ex.Message}" });
             }
         }
-
         public void Stop() => _isRunning = false;
     }
 }

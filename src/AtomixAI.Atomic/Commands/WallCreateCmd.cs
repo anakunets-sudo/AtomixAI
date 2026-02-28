@@ -6,11 +6,7 @@ using System.Diagnostics;
 
 namespace AtomixAI.Atomic.Commands
 {
-    [AtomicInfo(
-        name: "create_wall",
-        group: AtomicGroupType.Creation,
-        description: "Создает стену заданной длины. Длина должна быть с единицами (мм или ft).",
-        keywords: new[] { "wall", "line", "create" })]
+    [AtomicInfo(name: "create_wall", group: AtomicGroupType.Creation, description: "Создает стену заданной длины. Длина должна быть с единицами (мм или ft).", keywords: new[] { "wall", "line", "create" })]
     public class WallCreateCmd : BaseAtomicCommand, IAtomicCommand
     {
         [AtomicParam("Длина стены (например, '5000mm' или '10ft')", isRequired: true)]
@@ -54,7 +50,7 @@ namespace AtomixAI.Atomic.Commands
 
             Debug.WriteLine($"[WallCreateCmd] Финальная проверка перед возвратом. ID: {createdWallId}");
 
-            return SetOutput(createdWallId, 1, true, "1 wall created successfully.");
+            return SetOutput(createdWallId, true, "1 wall created successfully.");
         }
     }
 }

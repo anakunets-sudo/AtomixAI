@@ -17,7 +17,7 @@ namespace AtomixAI.Atomic
         /// </summary>
         public List<ISearchFilter> CreateFilterChain(List<Dictionary<string, object>> instructions)
         {
-            System.Diagnostics.Debug.WriteLine($"[AiSearchFactory]: Processing {instructions?.Count ?? 0} instructions...");
+            System.Diagnostics.Debug.WriteLine($"[AtomicSearchFactory]: Processing {instructions?.Count ?? 0} instructions...");
 
             var chain = new List<ISearchFilter>();
             if (instructions == null || instructions.Count == 0) return chain;

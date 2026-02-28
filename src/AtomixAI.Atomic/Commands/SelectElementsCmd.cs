@@ -22,10 +22,14 @@ namespace AtomixAI.Atomic.Commands
     {
         protected override AtomicResult Execute(ITransactionHandler handler)
         {
+
+            return SetOutput(null, false);
             // 1. Пытаемся получить данные. GetInput сам проверит In или _last.
             // Если в хранилище лежит один ElementId, наш маппер в Dispatcher-е 
             // уже должен был обернуть его в список (или мы делаем это тут).
             var inputResult = GetInput(out List<ElementId> toSelected);
+
+            Debug.WriteLine($"[{this.GetType().Name}] inputResult: {inputResult.ToString()}");
 
             if (!inputResult.Success)
                 return inputResult; // Возвращаем ошибку "Chain broken" или "Type mismatch"

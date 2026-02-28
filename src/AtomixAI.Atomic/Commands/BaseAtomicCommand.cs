@@ -34,10 +34,41 @@ namespace AtomixAI.Atomic.Commands
             if (rawData == null)
                 return AtomicResult.Error($"Chain broken: Tag '{activeIn}' is empty.");
 
+            // 1. Прямое совпадение типов
             if (rawData is T typedData)
             {
                 value = typedData;
                 return AtomicResult.Ok();
+            }
+
+            // 2. АВТО-УПАКОВКА: Если в хранилище объект (ElementId), а просят список (List<ElementId>)
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(typeof(T)) && typeof(T) != typeof(string))
+            {
+                Type elementType = typeof(T).IsGenericType
+                    ? typeof(T).GetGenericArguments()[0]
+                    : typeof(object);
+
+                if (elementType.IsAssignableFrom(rawData.GetType()))
+                {
+                    var listType = typeof(List<>).MakeGenericType(elementType);
+                    var newList = (System.Collections.IList)Activator.CreateInstance(listType);
+                    newList.Add(rawData);
+                    value = (T)newList;
+
+                    Debug.WriteLine($"[BASE-CMD] 🎁 Auto-wrapped {rawData.GetType().Name} into {typeof(T).Name} for tag '{activeIn}'");
+                    return AtomicResult.Ok();
+                }
+            }
+
+            // 3. АВТО-РАСПАКОВКА (опционально): Если в хранилище список из 1 элемента, а просят один объект
+            if (rawData is System.Collections.IList list && list.Count == 1)
+            {
+                var firstItem = list[0];
+                if (firstItem is T singleTypedData)
+                {
+                    value = singleTypedData;
+                    return AtomicResult.Ok();
+                }
             }
 
             return AtomicResult.Error($"Type mismatch: Tag '{activeIn}' is {rawData.GetType().Name}, expected {typeof(T).Name}.");

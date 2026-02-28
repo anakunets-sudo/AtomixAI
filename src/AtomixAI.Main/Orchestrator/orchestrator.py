@@ -1,7 +1,19 @@
 ﻿import os
 import sys
 import json
+import ollama
+import win32file
+import win32pipe
+import pywintypes
 import time
+import re
+
+# Добавляем путь для импорта инструкций
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
+import instructions
 
 # 1. ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ (ИЛИ ОЧИСТКА) ЛОГА
 LOG_FILE = "atomix_debug.log"
@@ -15,28 +27,9 @@ def log(msg):
     print(msg)
 log("[*] Проверка зависимостей...")
 
-# Добавляем путь для импорта инструкций
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.append(script_dir)
-
-try:
-    import instructions
-    import win32file
-    import win32pipe
-    import pywintypes
-    import google.generativeai as genai
-    log("[+] Библиотеки загружены.")
-except ImportError as e:
-    log(f"[!] ОШИБКА ИМПОРТА: {e}. Выполни: pip install google-generativeai pywin32")
-    input("Нажми ENTER для выхода...")
-    sys.exit(1)
-
-# --- CONFIG ---
-detected_lang = "German"  # Default
-lang_fixed = False
-
+# --- CONFIGURATION ---
 PIPE_NAME = r'\\.\pipe\AtomixAI_Bridge_Pipe'
+MODEL_NAME = 'qwen2.5:7b' # deepseek-r1:8b  qwen2.5:7b
 
 class RevitPipeClient:
     def __init__(self, name):
@@ -44,265 +37,240 @@ class RevitPipeClient:
         self.handle = None
 
     def connect(self):
-        log(f"[*] Поиск канала {self.name}...")
+        print(f"[*] Подключение к Revit ({self.name})...")
         while True:
             try:
                 self.handle = win32file.CreateFile(
                     self.name, win32file.GENERIC_READ | win32file.GENERIC_WRITE,
                     0, None, win32file.OPEN_EXISTING, 0, None)
-                log("[+] Соединение с Revit установлено.")
+                print("[+] Связь с Revit установлена.")
                 return True
-            except Exception:
+            except pywintypes.error:
                 time.sleep(1)
 
     def send_receive(self, payload):
         try:
             win32file.WriteFile(self.handle, (json.dumps(payload) + "\n").encode('utf-8'))
             _, data = win32file.ReadFile(self.handle, 65536)
-            decoded = data.decode('utf-8').strip()
-            if not decoded: return None, None
-            res = json.loads(decoded)
-            return (res.get("result"), res.get("ui_event")) if isinstance(res, dict) and "ui_event" in res else (res, None)
+            decoded_data = data.decode('utf-8').strip()
+            if not decoded_data: return None, None
+            
+            raw_res = json.loads(decoded_data)
+            if isinstance(raw_res, dict) and "ui_event" in raw_res:
+                return raw_res["result"], raw_res["ui_event"]
+            return raw_res, None
         except Exception as e:
-            log(f"[!] Ошибка Pipe: {e}")
-            return None, None
+            print(f"[!] Pipe Error: {e}")
+            return {"error": str(e)}, None
 
-def mcp_to_gemini(mcp_tools):
-    """
-    Конвертирует список инструментов из Revit Bridge в формат Google AI SDK.
-    """
-    function_declarations = []
-    
-    if not mcp_tools or not isinstance(mcp_tools, list):
-        return [{"function_declarations": []}]
-
+def mcp_to_ollama(mcp_tools):
+    ready_tools = []
     for t in mcp_tools:
-        # Извлекаем схему или создаем пустую, если её нет
-        schema = t.get("inputSchema", {"type": "object", "properties": {}})
-        props = schema.get("properties", {})
-        
-        # Исправляем специфику массивов для Gemini
-        for name, p_info in props.items():
-            if p_info.get("type") == "array":
-                if "items" not in p_info:
-                    p_info["items"] = {"type": "string"} # Дефолт для массивов
-                elif isinstance(p_info["items"], dict) and p_info["items"].get("type") == "object":
-                     if "properties" not in p_info["items"]:
-                         p_info["items"]["properties"] = {}
-        
-        function_declarations.append({
-            "name": t["name"],
-            "description": t.get("description", ""),
-            "parameters": schema
+        ready_tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("inputSchema", {"type": "object", "properties": {}})
+            }
         })
-        
-    return [{"function_declarations": function_declarations}]
+    return ready_tools
 
-def clean_args(obj):
-    if hasattr(obj, "items"):
-        return {k: clean_args(v) for k, v in obj.items()}
-    elif hasattr(obj, "__iter__") and not isinstance(obj, str):
-        return [clean_args(i) for i in obj]
-    return obj
+detected_lang = "Rassian" 
+lang_fixed = False 
 
-# --- ГЛОБАЛЬНЫЕ ДАННЫЕ (Загружаются 1 раз) ---
-GEMINI_API_KEY = "AIzaSyCUmi1kaIrHKf_-lBxRMzk9SOffOyJ1XnA" 
-genai.configure(api_key=GEMINI_API_KEY)
+HISTORY_FILE = os.path.join(script_dir, "atomix_history.json")
 
-SYSTEM_CORE = ""
-REVIT_MANUAL = ""
-TOOLS_CACHE = []
-SESSION = None
-DETECTED_LANG = "Russian"
-MODEL_NAME = 'models/gemini-2.5-flash-lite'
-
-from google.generativeai.types import content_types
-
-# --- ПРАВИЛЬНАЯ ЛОГИКА ИНИЦИАЛИЗАЦИИ ---
-def initialize_session(client):
-    """
-    Initial AI setup: manual upload, model creation with system instruction
-    and forced tool configuration (Force Function Calling).
-    """
-    global SESSION, DETECTED_LANG
-    
-    log("[*] Initializing AtomixAI session...")
-    
+def save_history(history):
     try:
-        # 1. DATA UPLOAD FROM REVIT (Once at startup)
-        # Get a list of functions and 10 pages of text manual
-        res_list, _ = client.send_receive({"action": "list"})
-        res_man, _ = client.send_receive({"action": "get_manual"})
-        
-        if not res_list or not res_man:
-            log("[!] Failed to get data from Revit. Check Bridge.")
-            return None
+        # Сохраняем только User и Assistant (без тяжелых системных промптов)
+        to_save = [m for m in history if m.get('role') in ['user', 'assistant']]
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(to_save, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log(f"[!] Ошибка сохранения истории: {e}")
 
-        # Convert tools to Gemini format
-        tools = mcp_to_gemini(res_list.get("tools", []))
-        manual_text = res_man.get("manual", "") if isinstance(res_man, dict) else str(res_man)
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                log(f"[+] История загружена: {len(data)} сообщений.")
+                return data
+        except:
+            return []
+    return []
 
-        # 2. FORMATION OF "PERSONALITY" AND ROLE (System Instruction)
-        # Here we strictly prohibit writing code and force the use of tools.
-        full_identity = (
+# Инициализация при старте
+chat_history = load_history()
+
+def process_ai_logic(user_text, client):
+    """
+    Основная логика: планирование цепочки (LLM) -> выполнение батча (Revit) -> отчет.
+    """
+    global chat_history, detected_lang
+    log(">>> [LOGIC] Start processing...") # 1.
+    try:
+        log(">>> [LOGIC] Requesting Manual from Revit...")
+        # --- 1. СИНХРОНИЗАЦИЯ КОНТЕКСТА ---
+        # Получаем свежий мануал инструментов и состояние памяти (#теги) прямо из Revit
+        res_manual, _ = client.send_receive({"action": "get_manual"})
+        res_context, _ = client.send_receive({"action": "get_context_state"})
+        log(f">>> [LOGIC] Manual received (len: {len(str(res_manual))})")
+        log(">>> [LOGIC] Context received.")
+
+        log(">>> [LOGIC] Requesting Context from Revit...")
+        dynamic_manual = res_manual.get("manual", "No tools available.")
+        current_tags = res_context.get("aliases", "No active aliases in memory.")
+
+        # --- 2. УПРАВЛЕНИЕ ИСТОРИЕЙ (Smart History) ---
+        # Оставляем последние 40 сообщений, чтобы не переполнить контекст модели
+        if len(chat_history) > 40:
+            chat_history = chat_history[-40:]
+
+        # Очищаем историю от старых системных промптов и технических отчетов 'tool'
+        # Оставляем только диалог User <-> Assistant для логики "Повтори"
+        clean_history = [m for m in chat_history if m.get('role') in ['user', 'assistant']]
+
+        # Формируем актуальный системный промпт (инъекция свежих данных)
+        system_content = (
             f"{instructions.PROFILES['default']}\n\n"
-            f"--- REVIT KNOWLEDGE BASE (MANUAL) ---\n{manual_text}\n\n"
-            f"--- STRICT OPERATIONAL RULES ---\n"
-            f"3. If a user asks to create, modify, or delete, find the matching TOOL and call it.\n"
-            f"4. Speak and summarize results strictly in {DETECTED_LANG}.\n"
-            f"5. Be a mechanical executor: Action first, talk later."
+            f"### BIM COMMANDS REFERENCE:\n{dynamic_manual}\n\n"
+            f"### CURRENT MEMORY STATE (TAGS):\n{current_tags}\n\n"
+            f"STRICT LANGUAGE: {detected_lang}\n"
+            f"GOAL: Plan a 'sequence' of commands.\n"
+            f"MEMORY RULE: Use '#tag' for Out and In parameters to link chains.\n"
         )
+        
+        # Сборка финального пакета для отправки в ИИ
+        current_session = [{'role': 'system', 'content': system_content}] + clean_history
+        current_session.append({'role': 'user', 'content': user_text})
 
-        # 3. CREATING A MODEL WITH HARD SETTINGS
-        # We DO NOT include standard Google tools (code_execution), only yours.
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=full_identity,
-            generation_config={
-                "temperature": 0.0,  # ZERO fantasies, complete determinism
-                "top_p": 1,
-                "max_output_tokens": 1024,
+        log(f">>> [LOGIC] Calling Ollama model: {MODEL_NAME}")
+        # --- 3. ЗАПРОС К LLM (Ollama/Gemini) ---
+        # Используем format='json' для Qwen/DeepSeek для гарантированной структуры
+        response = ollama.chat(
+            model=MODEL_NAME,
+            messages=current_session,
+            format='json',
+            options={
+                'num_ctx': 8192,         # Размер контекста
+                'repeat_penalty': 1.2,   # Штраф за повторы
+                'top_k': 20,             # Ограничение выборки
+                'top_p': 0.5,            # Nucleus sampling
+                'num_predict': 512,      # Макс. длина ответа
+                'temperature': 0.0       # Детерминированность
             }
         )
+        log(">>> [LOGIC] Ollama response received!")
 
-        # 4. CREATING A CHAT OBJECT (SESSION)
-        # Now SESSION will store the dialogue history and remember the manual.
-        SESSION = model.start_chat(history=[])
+        ai_raw = response.message.content
+        data = json.loads(ai_raw)
         
-        log(f"[+] Session is ready. Model: {MODEL_NAME}. Language: {DETECTED_LANG}")
-        return tools
+        # Извлекаем компоненты ответа
+        ai_thought = data.get("thought", "Planning completion...")
+        ai_sequence = data.get("sequence", []) # Это база для функции "Повтори"
 
-    except Exception as e:
-        log(f"[!] Initialization error: {e}")
-        import traceback
-        log(traceback.format_exc())
-        return None
+        log(f">>> [LOGIC ai_thought] {ai_thought}")
+        log(f">>> [LOGIC ai_sequence] {ai_sequence}")
 
-log("[*] List of available models:")
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        log(f"  - {m.name}")
-
-def process_ai_logic(user_text, tools, client):
-    """
-    Основная логика взаимодействия с Gemini: 
-    Получает контекст -> Делает запрос -> Выполняет инструменты -> Возвращает ответ.
-    """
-    try:
-        # 1. Сбор динамического контекста (теги #tag выделенных элементов)
-        res_state, _ = client.send_receive({"action": "get_context_state"})
-        # Безопасно извлекаем текст состояния (из словаря или напрямую)
-        state_text = res_state.get("aliases", "") if isinstance(res_state, dict) else str(res_state)
-
-        # 2. Формируем "дельту" (только то, что изменилось: теги и запрос)
-        prompt = f"REVIT CONTEXT (TAGS): {state_text}\nUSER REQUEST: {user_text}"
-        
-        # Первый запрос к модели (SESSION уже содержит системный мануал и историю)
-        response = SESSION.send_message(prompt, tools=tools)
-
-        # 3. ЦИКЛ ВЫПОЛНЕНИЯ ИНСТРУМЕНТОВ (Tool Use Loop)
-        while True:
-            # ПРОВЕРКА: Есть ли в ответе вызовы функций?
-            if not response.candidates or not response.candidates[0].content.parts:
-                break
-                
-            tool_calls = [p.function_call for p in response.candidates[0].content.parts if p.function_call]
+        # --- 4. ВЫПОЛНЕНИЕ ЦЕПОЧКИ (Batch Execution) ---
+        if ai_sequence and len(ai_sequence) > 0:
+            log(f"[*] Sending batch to Revit: {len(ai_sequence)} steps...")
             
-            # Если инструментов нет — значит модель просто ответила текстом, выходим из цикла
-            if not tool_calls:
-                break
-
-            # Обрабатываем каждый вызов инструмента из пачки
-            for fn in tool_calls:
-                log(f"[*] Исполнение инструмента: {fn.name}")
-                
-                # ЗАЩИТА: Очищаем Protobuf-аргументы перед JSON-сериализацией
-                safe_args = clean_args(fn.args)
-                
-                # Формируем пакет для Revit Bridge
-                payload = {
-                    "action": "call", 
-                    "name": fn.name, 
-                    "arguments": json.dumps(safe_args) 
-                }
-                
-                # Отправляем в Revit через Pipe
-                revit_res, _ = client.send_receive(payload)
-
-                exec_data = "No result from Revit"
-                
-                # Если команда асинхронная (попала в очередь Revit)
-                if revit_res and revit_res.get("status") == "queued":
-                    log(f"[*] Ожидание завершения {fn.name}...")
+            # Отправляем весь массив команд одним экшеном
+            payload = {"action": "call_batch", "sequence": ai_sequence}
+            revit_res, _ = client.send_receive(payload)
+            
+            # Ожидание результата через механизм Ping (Polling)
+            execution_result = {"success": False, "message": "Revit timeout"}
+            if revit_res and "batch_queued" in revit_res.get("status", ""):
+                log("[*] Sequence in progress... Waiting for Revit signal.")
+                while True:
+                    poll_res, ui_event = client.send_receive({"action": "ping"})
                     
-                    # Пинг-понг цикл ожидания результата (до 15 секунд)
-                    for _ in range(50): 
-                        p_res, ui_ev = client.send_receive({"action": "ping"})
-                        # Ищем результат в обычном ответе или в ui_event
-                        res = ui_ev if ui_ev else p_res
-                        
-                        if isinstance(res, dict) and res.get("action") == "tool_execution_result":
-                            if res.get("tool") == fn.name:
-                                # Формируем статус для ИИ
-                                success = res.get("success", False)
-                                msg = res.get("message", "Success")
-                                exec_data = f"STATUS: {'SUCCESS' if success else 'ERROR'}. Info: {msg}"
-                                log(f"[+] Revit ответил: {exec_data}")
-                                break
-                        time.sleep(0.3)
-
-                # ВАЖНО: Возвращаем результат выполнения обратно в Gemini.
-                # Добавляем инструкцию "Summarize", чтобы избежать пустых ответов (Finish Reason 1).
-                feedback_msg = f"Tool '{fn.name}' finished. Result: {exec_data}. Now provide a brief status report to the user in {DETECTED_LANG}."
-                
-                response = SESSION.send_message(
-                    genai.protos.Content(parts=[
-                        genai.protos.Part(
-                            function_response=genai.protos.FunctionResponse(
-                                name=fn.name, 
-                                response={'result': feedback_msg}
-                            )
-                        )
-                    ])
-                )
-
-        # 4. ФИНАЛЬНЫЙ ВЫВОД (Безопасное извлечение текста)
-        if response.candidates and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'text') and part.text:
-                    return part.text.strip()
+                    # Ищем маркер завершения батча в ui_event или основном ответе
+                    res = ui_event if ui_event else poll_res
+                    if res and res.get("action") == "tool_execution_result":
+                        execution_result = res
+                        break
+                    
+                    time.sleep(0.3) # Пауза между опросами
+            
+            # --- 5. ФИКСАЦИЯ В ИСТОРИИ (Для ГИПа) ---
+            chat_history.append({'role': 'user', 'content': user_text})
+            
+            # Записываем ответ ИИ с сохранением "сырых" команд для будущего "Повтори"
+            chat_history.append({
+                'role': 'assistant', 
+                'content': ai_thought,
+                'raw_sequence': ai_sequence, # Скрытые данные для Суперкоманды
+                'execution_status': 'success' if execution_result.get('success') else 'failed'
+            })
+            
+            # Сохраняем на диск (atomix_history.json)
+            save_history(chat_history)
+            
+            # Финальный отчет пользователю
+            status_emoji = "✅" if execution_result.get("success") else "❌"
+            return f"{ai_thought}\n\n{status_emoji} **Revit Report:** {execution_result.get('message')}"
         
-        return "Действие в Revit завершено успешно."
+        else:
+            # Если команд нет, просто текстовый ответ
+            chat_history.append({'role': 'user', 'content': user_text})
+            chat_history.append({'role': 'assistant', 'content': ai_thought})
+            save_history(chat_history)
+            return ai_thought
 
+    except json.JSONDecodeError as je:
+        log(f"[!] AI JSON Error: {je}")
+        return "The AI generated an invalid sequence format. Please try rephrasing."
     except Exception as e:
-        log(f"[!] КРИТИЧЕСКАЯ ОШИБКА В LOGIC: {e}")
-        # Печатаем полный трейсбэк в консоль/лог для отладки
-        import traceback
-        log(traceback.format_exc())
-        return f"Произошла ошибка логики: {e}"
+        log(f"[CRITICAL] Logic failed: {e}")
+        return f"System Error: {str(e)}"
 
 def main():
     client = RevitPipeClient(PIPE_NAME)
     if not client.connect(): return
 
-    # 1. Загружаем инструкции, мануал и создаем ГЛОБАЛЬНЫЙ SESSION
-    tools = initialize_session(client) 
+    # Синхронизация инструментов
+    res, _ = client.send_receive({"action": "list"})
+    tools = mcp_to_ollama(res.get("tools", []))
+    print(f"[*] Инструменты синхронизированы: {len(tools)} шт.")
 
+    # Статус в UI
     client.send_receive({
-        "action": "ui_log", 
-        "type": "system_status", 
-        "model": MODEL_NAME, 
+        "action": "ui_log",
+        "type": "system_status",
+        "model": MODEL_NAME,
         "status": "online"
     })
-    
-    log("[+] Готов к работе.")
 
+    print("[*] Ожидание команд...")
+    
     while True:
+        # Пинг для получения событий из WebView2
         _, ui_event = client.send_receive({"action": "ping"})
-        if ui_event and ui_event.get("action") == "chat_request":
-            # Передаем только 3 аргумента
-            ans = process_ai_logic(ui_event.get("prompt"), tools, client)
-            client.send_receive({"action": "ui_log", "role": "ai", "content": ans})
+
+        if ui_event:
+            action = ui_event.get("action")
+            if action == "chat_request":
+                prompt = ui_event.get("prompt")
+                print(f"\n[USER]: {prompt}")
+                
+                # Получаем осмысленный ответ от ИИ
+                ai_text = process_ai_logic(prompt, client)
+                
+                # Отправляем в UI Revit
+                client.send_receive({
+                    "action": "ui_log", 
+                    "role": "ai", 
+                    "content": ai_text
+                })
+
+            elif action == "stop":
+                print("\n[!] EMERGENCY STOP")
+        
         time.sleep(0.4)
 
 if __name__ == "__main__":

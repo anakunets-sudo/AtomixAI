@@ -51,6 +51,8 @@ namespace AtomixAI.Atomic.Commands
                 return SetOutput(null, true); //false если ошибка если оборавать код, иначе он продолжится в цепочке
             }
 
+            Debug.WriteLine($"[{this.GetType().Name}] elementIds: {elementIds.ToString()}");
+
             return SetOutput(elementIds, elementIds.Count, true, $"Found {elementIds.Count} elements. Stored in '{Out}'.");
         }
     }
