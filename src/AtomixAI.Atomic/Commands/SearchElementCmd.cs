@@ -29,6 +29,8 @@ namespace AtomixAI.Atomic.Commands
 
             UIDocument uidoc = handler.UIDoc;
 
+            Debug.WriteLine($"[{this.GetType().Name}] started");
+
             /*var result = GetInput(out List<ElementId> inputData);
 
             if (!result.Success) return result;*/
@@ -36,7 +38,11 @@ namespace AtomixAI.Atomic.Commands
             // 2. Логика поиска (AtomicSearchFactory)
             var factory = new AtomicSearchFactory();
 
+            Debug.WriteLine($"[{this.GetType().Name}] factory class: {factory.ToString()}");
+
             var filterChain = factory.CreateFilterChain(this.Filters);
+
+            Debug.WriteLine($"[{this.GetType().Name}] factory Count: {filterChain.Count}");
 
             foreach (var filter in filterChain)
             {

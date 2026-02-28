@@ -27,21 +27,27 @@ namespace AtomixAI.Main.Infrastructure
 
         public void Execute(UIApplication app)
         {
-            // 1. Установка фабрики (чтобы транзакции работали)
             TransactionManager.TransactionFactory = (name) => new RevitTransactionHandler(app.ActiveUIDocument, name);
 
             while (CommandQueue.Count > 0)
             {
                 var task = CommandQueue.Dequeue();
-                AtomicResult result;
+                AtomicResult finalResult = null;
 
                 if (task.ToolId == "__BATCH__")
-                    result = _dispatcher.DispatchSequence(task.JsonArgs); // Вызов цепочки
-                else
-                    result = _dispatcher.Dispatch(task.ToolId, task.JsonArgs); // Одиночный
+                {
+                    // DispatchSequence вернет List<AtomicResult> внутри одного AtomicResult.Data
+                    finalResult = _dispatcher.DispatchSequence(task.JsonArgs);
+                }
+                /*else
+                {
+                    // Одиночная команда
+                    finalResult = _dispatcher.Dispatch(task.ToolId, task.JsonArgs);
+                }*/
 
-                // 2. ОТПРАВКА ОТВЕТА (Если этого нет, Python "зависнет")
-                _mcpHost?.SendToolResult(result, task.ToolId);
+                // ЕДИНАЯ ТОЧКА ОТЧЕТА:
+                // Теперь ИИ получает ровно ОДИН ответ на свой ОДИН запрос (будь то call или call_batch)
+                _mcpHost?.SendToolResult(finalResult, task.ToolId);
             }
         }
 

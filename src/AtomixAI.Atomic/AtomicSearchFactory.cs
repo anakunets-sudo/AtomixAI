@@ -20,12 +20,13 @@ namespace AtomixAI.Atomic
             System.Diagnostics.Debug.WriteLine($"[AtomicSearchFactory]: Processing {instructions?.Count ?? 0} instructions...");
 
             var chain = new List<ISearchFilter>();
+
             if (instructions == null || instructions.Count == 0) return chain;
 
             // 1. Caching filter types for performance
             if (_filterCache == null)
             {
-                _filterCache = Assembly.GetAssembly(typeof(ISearchFilter))
+                _filterCache = Assembly.GetAssembly(typeof(AtomicSearchFactory))
                     .GetTypes()
                     .Where(p => typeof(ISearchFilter).IsAssignableFrom(p) && !p.IsInterface && !p.IsAbstract)
                     .Select(t => new { Type = t, Info = t.GetCustomAttribute<AtomicInfoAttribute>() })

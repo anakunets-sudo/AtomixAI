@@ -3,6 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -39,6 +40,8 @@ namespace AtomixAI.Atomic.Commands
                 System.Diagnostics.Debug.WriteLine($"[ERROR] {this.GetType().Name}: Incoming collector is NULL!");
                 return null;
             }
+
+            Debug.WriteLine($"[{this.GetType().Name}]: CategoryName: {CategoryName}");
 
             var bic = ResolveCategory(CategoryName);
 

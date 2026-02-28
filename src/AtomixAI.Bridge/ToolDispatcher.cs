@@ -47,24 +47,24 @@ namespace AtomixAI.Bridge
                     return AtomicResult.Error("Empty sequence received.");
 
                 // Запускаем через наш новый метод в TransactionManager
-                return TransactionManager.ExecuteSequence("AtomixAI AI-Plan", () =>
+                return TransactionManager.ExecuteSequence("AtomixAI Plan", () =>
                 {
-                    var results = new List<AtomicResult>();
+                    var journal = new List<AtomicResult>();
 
                     foreach (var step in steps)
                     {
-                        // Для каждого шага вызываем существующий метод Dispatch
-                        // Но нам нужно передать аргументы как строку JSON, как того ожидает Dispatch
-                        string argsJson = JsonConvert.SerializeObject(step.Arguments);
+                        // Dispatch просто возвращает результат, никуда его не отправляя
+                        var stepResult = Dispatch(step.Tool, JsonConvert.SerializeObject(step.Arguments));
 
-                        var stepResult = Dispatch(step.Tool, argsJson);
-                        results.Add(stepResult);
+                        // КЛАДЕМ В ЖУРНАЛ:
+                        journal.Add(stepResult);
 
-                        // Если шаг не удался — прерываем выполнение цепочки немедленно
                         if (!stepResult.Success) break;
                     }
 
-                    return results;
+                    // ВОЗВРАЩАЕМ ВЕСЬ СПИСОК:
+                    // Мы отдаем список через поле Data объекта AtomicResult
+                    return journal;
                 });
             }
             catch (Exception ex)
@@ -115,11 +115,12 @@ namespace AtomixAI.Bridge
                 // Маппинг свойств из JSON в объект команды
                 MapProperties(instance, parameters);
 
+                /*
                 // 4. ВЫПОЛНЕНИЕ в безопасном контексте транзакций Revit
                 AtomicResult result = TransactionManager.ExecuteSafe(toolId, () => {
                     return instance.Execute(parameters);
                 });
-                /*
+                
                 // 5. Обработка результатов и хранилища (Storage)
                 if (result != null && result.Success)
                 {
@@ -132,7 +133,7 @@ namespace AtomixAI.Bridge
                         AtomicStorage.Set(outKey, result.Data);
                         Debug.WriteLine($"[DISPATCHER] 💾 New data saved to storage: {outKey}");
                     }
-                }*/
+                }
 
                 // 6. Отправка обратной связи в Python через McpHost
                 if (_mcpHost != null && result != null)
@@ -151,6 +152,9 @@ namespace AtomixAI.Bridge
                 }
 
                 return result;
+                */
+
+                return instance.Execute(parameters);
             }
             catch (Exception ex)
             {

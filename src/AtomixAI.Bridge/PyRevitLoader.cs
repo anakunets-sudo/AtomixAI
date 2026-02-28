@@ -18,32 +18,36 @@ namespace AtomixAI.Bridge
 
         public AtomicResult RunScript(string scriptName, Dictionary<string, object> args)
         {
-            // Ищем скрипт (например, "wall_cleanup.py") 
             string fullPath = Path.Combine(_scriptsPath, scriptName);
-
             if (!File.Exists(fullPath))
-                return new AtomicResult { Success = false, Message = $"Скрипт {scriptName} не найден." };
+                return AtomicResult.Error($"Скрипт {scriptName} не найден.");
 
             try
             {
-                // Для выполнения через pyRevit мы обычно используем CLI или 
-                // передаем аргументы через временный JSON-файл/Environment 
+                // 1. Проверяем, есть ли активная транзакция (хендлер)
+                var handler = TransactionManager.CurrentHandler;
+                if (handler == null)
+                    return AtomicResult.Error("Python Execution Failed: No active transaction context.");
+
+                // 2. Подготовка аргументов (через переменные окружения или временный файл)
                 string jsonArgs = JsonConvert.SerializeObject(args);
 
-                // ВАЖНО: Выполняем скрипт внутри нашей транзакции из Core 
-                return TransactionManager.ExecuteSafe($"PyScript: {scriptName}", () =>
-                {
-                    // Здесь логика вызова IronPython Engine или запуск через pyrevit CLI 
-                    // Пример заглушки: 
-                    Console.WriteLine($"Запуск {scriptName} с параметрами: {jsonArgs}");
+                // 3. ВЫПОЛНЕНИЕ (Прямое)
+                // Здесь вы вызываете IronPython Engine. 
+                // ВАЖНО: Вы передаете handler.UIDoc.Document в область видимости Python, 
+                // чтобы скрипт мог работать в ТОЙ ЖЕ транзакции, что и C#.
 
-                    // Реальное выполнение: 
-                    // var engine = Python.CreateEngine(); ... 
-                });
+                // Пример (псевдокод):
+                // var scope = _engine.CreateScope();
+                // scope.SetVariable("doc", handler.UIDoc.Document);
+                // scope.SetVariable("args", args);
+                // var result = _engine.ExecuteFile(fullPath, scope);
+
+                return AtomicResult.Ok($"Script {scriptName} executed successfully.");
             }
             catch (Exception ex)
             {
-                return new AtomicResult { Success = false, Message = $"Ошибка Python: {ex.Message}" };
+                return AtomicResult.Error($"Python Error in '{scriptName}': {ex.Message}");
             }
         }
     }

@@ -44,6 +44,7 @@ namespace AtomixAI.Core
             }
         }
 
+        /*
         public static AtomicResult ExecuteSafe(string name, Func<AtomicResult> action)
         {
             // Если мы уже внутри ExecuteSequence, просто выполняем действие
@@ -67,6 +68,7 @@ namespace AtomixAI.Core
             }
         }
 
+        */
         /// <summary>
         /// Удаляет из хранилища все ключи, которые появились в процессе выполнения неудачной команды.
         /// </summary>
@@ -91,12 +93,13 @@ namespace AtomixAI.Core
         }
 
         // Перегрузка для простых Action (также с защитой данных)
+        /*
         public static AtomicResult ExecuteSafe(string name, Action action)
         {
             return ExecuteSafe(name, () => {
                 action();
                 return new AtomicResult { Success = true };
             });
-        }
+        }*/
     }
 }
