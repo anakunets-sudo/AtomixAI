@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 
 namespace AtomixAI.Bridge
 {
@@ -37,39 +38,73 @@ namespace AtomixAI.Bridge
 
         public AtomicResult DispatchSequence(string jsonSequence)
         {
-            Debug.WriteLine("[DISPATCHER] >>> Processing Sequence Batch");
+            Debug.WriteLine("[DISPATCHER] >>> Processing Sequence Batch (Single Result Mode)");
+
+            var reportBuilder = new StringBuilder();
+            var metadataCollector = new Dictionary<string, object>();
+            int successCount = 0;
 
             try
             {
-                // Парсим массив команд из JSON
+                // 1. Парсим шаги
                 var steps = JsonConvert.DeserializeObject<List<SequenceStep>>(jsonSequence);
                 if (steps == null || steps.Count == 0)
                     return AtomicResult.Error("Empty sequence received.");
 
-                // Запускаем через наш новый метод в TransactionManager
+                // 2. Выполняем через TransactionManager (он сделает один Rollback при Success = false)
                 return TransactionManager.ExecuteSequence("AtomixAI Plan", () =>
                 {
-                    var journal = new List<AtomicResult>();
-
                     foreach (var step in steps)
                     {
-                        // Dispatch просто возвращает результат, никуда его не отправляя
+                        // Выполняем команду (она сама пишет в AtomicStorage под меткой Out)
                         var stepResult = Dispatch(step.Tool, JsonConvert.SerializeObject(step.Arguments));
 
-                        // КЛАДЕМ В ЖУРНАЛ:
-                        journal.Add(stepResult);
+                        // Накапливаем текстовый отчет для Message (для человека и ИИ)
+                        reportBuilder.AppendLine($"- {step.Tool}: {(stepResult.Success ? "OK" : "FAILED")}. {stepResult.Message}");
 
-                        if (!stepResult.Success) break;
+                        if (!stepResult.Success)
+                        {
+                            // ПРЕРЫВАЕМ при первой ошибке
+                            return new AtomicResult
+                            {
+                                Success = false,
+                                Message = $"Sequence halted at step '{step.Tool}': {stepResult.Message}\nFull Log:\n{reportBuilder}"
+                            };
+                        }
+
+                        // Собираем "Квитанцию" для Data (Deep Metadata)
+                        // Если у команды был параметр Out (метка), добавим инфо о ней
+                        if (step.Arguments.TryGetValue("Out", out var tagObj) && tagObj != null)
+                        {
+                            string tag = tagObj.ToString();
+                            metadataCollector[tag] = new
+                            {
+                                count = stepResult.Data, // Предполагаем, что команда вернула Count в Data
+                                tool = step.Tool
+                            };
+                        }
+
+                        successCount++;
                     }
 
-                    // ВОЗВРАЩАЕМ ВЕСЬ СПИСОК:
-                    // Мы отдаем список через поле Data объекта AtomicResult
-                    return journal;
+                    // 3. ФИНАЛЬНЫЙ СБОР: Если всё успешно, создаем итоговый результат
+                    return new AtomicResult
+                    {
+                        Success = true,
+                        Message = $"Successfully executed {successCount} steps.\n{reportBuilder}",
+                        // Анонимный класс (квитанция меток) для логики ИИ
+                        Data = new
+                        {
+                            total_success = successCount,
+                            tags = metadataCollector,
+                            status = "Completed"
+                        }
+                    };
                 });
             }
             catch (Exception ex)
             {
-                return AtomicResult.Error($"Sequence Dispatch Error: {ex.Message}");
+                return AtomicResult.Error($"Sequence Critical Error: {ex.Message}");
             }
         }
 

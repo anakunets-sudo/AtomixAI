@@ -1,17 +1,18 @@
-﻿using System;
+﻿using AtomixAI.Atomic;
+using AtomixAI.Core;
+using Autodesk.Revit.UI;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Concurrent; // Добавлено для очереди сообщений UI
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
-using System.Collections.Concurrent; // Добавлено для очереди сообщений UI
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Autodesk.Revit.UI;
-using AtomixAI.Core;
-using AtomixAI.Atomic;
 
 namespace AtomixAI.Bridge
 {
@@ -37,6 +38,8 @@ namespace AtomixAI.Bridge
         // Метод для вызова из WebView2 (OnWebMessageReceived) 
         public void BroadcastToClients(string jsonPayload)
         {
+            Debug.WriteLine($"[McpHost] BroadcastToClients: {jsonPayload} ");
+
             _uiToPythonQueue.Enqueue(jsonPayload);
         }
 
@@ -148,6 +151,8 @@ namespace AtomixAI.Bridge
         // Внутри McpHost.cs добавим метод для отправки результата выполнения команды
         public void SendToolResult(AtomicResult result, string toolId)
         {
+            Debug.WriteLine($"[McpHost] SendToolResult start");
+
             var response = new
             {
                 action = "tool_execution_result",
@@ -156,6 +161,9 @@ namespace AtomixAI.Bridge
                 message = result.Message,
                 data = result.Data // Например, количество найденных элементов
             };
+
+
+            Debug.WriteLine($"[McpHost] SendToolResult: {response.ToString()} ");
 
             // Кладём в очередь для отправки в Python при следующем опросе (poll)
             BroadcastToClients(JsonConvert.SerializeObject(response));

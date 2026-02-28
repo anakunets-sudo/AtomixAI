@@ -33,16 +33,17 @@ namespace AtomixAI.Main
                 }
 
                 // 1. Инициализируем ToolDispatcher (укажите ваш путь к папке со скриптами Python)
-                var dispatcher = new ToolDispatcher(@"C:\AtomixAI\Scripts");                
+                var _dispatcher = new ToolDispatcher(@"C:\AtomixAI\Scripts");                
 
                 // 2. Создаем обработчик (пока без хоста, чтобы избежать ошибки конструктора)
-                _handler = new AtomicExternalEventHandler(dispatcher);
+                _handler = new AtomicExternalEventHandler(_dispatcher);
                 _externalEvent = ExternalEvent.Create(_handler);
 
                 // 3. Создаем MCP Host, передавая ему очередь из обработчика
-                _mcpHost = new McpHost(_handler.CommandQueue, _externalEvent, dispatcher);
+                _mcpHost = new McpHost(_handler.CommandQueue, _externalEvent, _dispatcher);
 
-                dispatcher.RegisterHost(_mcpHost);
+                _dispatcher.RegisterHost(_mcpHost);
+                _handler.RegisterHost(_mcpHost);
 
                 // 4. Регистрируем панель, передавая в неё McpHost
                 _pane = new AtomixDockablePane(_handler, _externalEvent, _mcpHost); // ДОБАВЛЕНО: _mcpHost

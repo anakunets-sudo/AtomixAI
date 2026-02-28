@@ -13,33 +13,44 @@ namespace AtomixAI.Core
         private static ITransactionHandler? _currentHandler;
         public static ITransactionHandler? CurrentHandler => _currentHandler;
 
-        public static AtomicResult ExecuteSequence(string name, Func<List<AtomicResult>> sequenceAction)
+        public static AtomicResult ExecuteSequence(string name, Func<AtomicResult> sequenceAction)
         {
+            // Снимок хранилища меток (#) до начала
             var snapshot = AtomicStorage.GetCurrentContext();
 
-            // Создаем локальную ссылку на хендлер
             using (var handler = TransactionFactory?.Invoke(name))
             {
                 if (handler == null) return AtomicResult.Error("Factory not initialized");
+                _currentHandler = handler;
 
-                _currentHandler = handler; // Даем доступ командам внутри
                 try
                 {
-                    var results = sequenceAction();
+                    // 1. ВЫПОЛНЕНИЕ: Получаем один склеенный результат из DispatchSequence
+                    var finalResult = sequenceAction();
 
-                    if (results.Any(r => !r.Success))
+                    // 2. РЕАКЦИЯ: Если хоть один шаг внутри был Success = false
+                    if (finalResult == null || !finalResult.Success)
                     {
-                        handler.Rollback(); // Вызываем у локальной переменной
-                        RollbackStorage(snapshot);
-                        return AtomicResult.Error("Sequence failed.");
+                        handler.Rollback(); // Откатываем все изменения в Revit
+                        RollbackStorage(snapshot); // Очищаем созданные в этой сессии метки
+
+                        // Возвращаем тот самый Error, который пришел из Dispatcher
+                        return finalResult ?? AtomicResult.Error("Sequence failed with null result.");
                     }
 
+                    // 3. ФИКСАЦИЯ: Если всё отлично
                     handler.Assimilate();
-                    return AtomicResult.Ok();
+                    return finalResult;
+                }
+                catch (Exception ex)
+                {
+                    handler?.Rollback();
+                    RollbackStorage(snapshot);
+                    return AtomicResult.Error($"Sequence Critical Crash: {ex.Message}");
                 }
                 finally
                 {
-                    _currentHandler = null; // Чистим статику только в самом конце батча
+                    _currentHandler = null;
                 }
             }
         }

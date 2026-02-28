@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using AtomixAI.Core;
+using System.Diagnostics;
 
 namespace AtomixAI.Main.Infrastructure
 {
@@ -32,13 +33,8 @@ namespace AtomixAI.Main.Infrastructure
             while (CommandQueue.Count > 0)
             {
                 var task = CommandQueue.Dequeue();
-                AtomicResult finalResult = null;
 
-                if (task.ToolId == "__BATCH__")
-                {
-                    // DispatchSequence вернет List<AtomicResult> внутри одного AtomicResult.Data
-                    finalResult = _dispatcher.DispatchSequence(task.JsonArgs);
-                }
+                AtomicResult finalResult =  _dispatcher.DispatchSequence(task.JsonArgs);
                 /*else
                 {
                     // Одиночная команда
@@ -47,7 +43,14 @@ namespace AtomixAI.Main.Infrastructure
 
                 // ЕДИНАЯ ТОЧКА ОТЧЕТА:
                 // Теперь ИИ получает ровно ОДИН ответ на свой ОДИН запрос (будь то call или call_batch)
+
+                Debug.WriteLine($"[AtomicExternalEventHandler] finalResult: {finalResult.ToString()}");
+
+                Debug.WriteLine($"[AtomicExternalEventHandler] _mcpHost: {_mcpHost.ToString()}");
+
                 _mcpHost?.SendToolResult(finalResult, task.ToolId);
+
+                Debug.WriteLine($"[AtomicExternalEventHandler] ended ");
             }
         }
 
