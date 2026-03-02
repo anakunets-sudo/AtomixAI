@@ -7,7 +7,7 @@ namespace AtomixAI.Core
     internal class StorageSlot
     {
         public object Value { get; set; }
-        public HashSet<string> Aliases { get; } = new HashSet<string>();
+        public HashSet<string> Tags { get; } = new HashSet<string>();
     }
 
     public static class AtomicStorage
@@ -16,7 +16,7 @@ namespace AtomixAI.Core
         private static readonly List<string> _history = new List<string>();
         private static readonly object _lockObj = new object();
         public static int MaxCapacity { get; set; } = 100;
-        private const string LAST_KEY = "_last";
+        private const string LAST_KEY = "#_last";
 
         // --- ТОТ САМЫЙ МЕТОД ДЛЯ TRANSACTION MANAGER ---
         public static string[] GetCurrentContext()
@@ -28,62 +28,62 @@ namespace AtomixAI.Core
             }
         }
 
-        public static void Set(string alias, object value)
+        public static void Set(string tag, object value)
         {
-            if (string.IsNullOrWhiteSpace(alias) || alias.Equals("none", StringComparison.OrdinalIgnoreCase)) return;
-            if (value == null) { Remove(alias); return; }
+            if (string.IsNullOrWhiteSpace(tag) || tag.Equals("none", StringComparison.OrdinalIgnoreCase)) return;
+            if (value == null) { Remove(tag); return; }
 
             lock (_lockObj)
             {
-                if (_data.TryGetValue(alias, out var oldSlot)) oldSlot.Aliases.Remove(alias);
+                if (_data.TryGetValue(tag, out var oldSlot)) oldSlot.Tags.Remove(tag);
 
                 var newSlot = new StorageSlot { Value = value };
-                newSlot.Aliases.Add(alias);
-                newSlot.Aliases.Add(LAST_KEY);
+                newSlot.Tags.Add(tag);
+                newSlot.Tags.Add(LAST_KEY);
 
-                _data[alias] = newSlot;
+                _data[tag] = newSlot;
                 _data[LAST_KEY] = newSlot;
 
-                UpdateHistory(alias);
+                UpdateHistory(tag);
                 CheckCapacity();
             }
         }
 
-        public static void Link(string sourceAlias, string targetAlias)
+        public static void Link(string sourceTag, string targetTag)
         {
-            if (string.IsNullOrEmpty(targetAlias) || sourceAlias == targetAlias) return;
+            if (string.IsNullOrEmpty(targetTag) || sourceTag == targetTag) return;
             lock (_lockObj)
             {
-                if (_data.TryGetValue(sourceAlias, out var slot))
+                if (_data.TryGetValue(sourceTag, out var slot))
                 {
-                    slot.Aliases.Add(targetAlias);
-                    _data[targetAlias] = slot;
-                    UpdateHistory(targetAlias);
+                    slot.Tags.Add(targetTag);
+                    _data[targetTag] = slot;
+                    UpdateHistory(targetTag);
                 }
             }
         }
 
-        public static object Get(string alias)
+        public static object Get(string tag)
         {
             lock (_lockObj)
             {
-                return _data.TryGetValue(alias, out var slot) ? slot.Value : null;
+                return _data.TryGetValue(tag, out var slot) ? slot.Value : null;
             }
         }
 
-        public static T Get<T>(string alias)
+        public static T Get<T>(string tag)
         {
-            var val = Get(alias);
+            var val = Get(tag);
             return val is T ? (T)val : default;
         }
 
-        public static void Remove(string alias)
+        public static void Remove(string tag)
         {
             lock (_lockObj)
             {
-                if (_data.TryGetValue(alias, out var slot))
+                if (_data.TryGetValue(tag, out var slot))
                 {
-                    foreach (var linkedName in slot.Aliases.ToList())
+                    foreach (var linkedName in slot.Tags.ToList())
                     {
                         _data.Remove(linkedName);
                         _history.Remove(linkedName);
@@ -93,10 +93,10 @@ namespace AtomixAI.Core
             }
         }
 
-        private static void UpdateHistory(string alias)
+        private static void UpdateHistory(string tag)
         {
-            _history.Remove(alias);
-            _history.Add(alias);
+            _history.Remove(tag);
+            _history.Add(tag);
         }
 
         private static void CheckCapacity()

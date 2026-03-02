@@ -180,7 +180,7 @@ namespace AtomixAI.Bridge
                     return JsonConvert.SerializeObject(new { manual = Registry.GetAiManual() });
 
                 if (action == "get_context_state")
-                    return JsonConvert.SerializeObject(new { aliases = Registry.GetActiveContentStateAliases() });
+                    return JsonConvert.SerializeObject(new { tags = Registry.GetActiveContentStateTags() });
 
                 // НОВЫЙ КЕЙС: Ответ от ИИ для интерфейса
                 if (action == "ui_log")

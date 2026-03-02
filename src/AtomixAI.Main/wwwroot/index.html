@@ -281,15 +281,23 @@
             const msgEl = document.getElementById(thinkingMsgId);
             if (msgEl) {
                 msgEl.classList.remove('thinking-state');
-                // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Используем innerHTML вместо innerText
-                msgEl.innerHTML = data.content;
 
-                // Сразу вешаем обработчики на кнопки в обновленном контейнере
+                // 1. ТРАНСФОРМАЦИЯ: Превращаем текст от Revit/ИИ в кнопки с тегами
+                // Мы ищем #теги и оборачиваем их в <span> прямо перед вставкой
+                const formattedContent = data.content.replace(/['"]?(#\w+)['"]?/g, (match, tag) => {
+                    return `<span class="alias-btn" data-alias="${tag}">${tag}</span>`;
+                });
+
+                // 2. ВСТАВКА: Теперь innerHTML содержит готовые кнопки
+                msgEl.innerHTML = formattedContent;
+
+                // 3. ЖИЗНЬ: Вешаем обработчики на новые кнопки
                 initAliasButtons(msgEl);
                 addRating(msgEl);
             }
             thinkingMsgId = null;
         } else {
+            // Если это обычное сообщение (не из состояния "thinking")
             appendMessage(data.role, data.content, data.role === 'ai');
         }
     }
@@ -333,23 +341,25 @@
         msgDiv.id = id;
         msgDiv.className = `msg ${role}`;
 
-        if (role === 'ai') {
-            // 1. ПАРСИНГ: Ищем #теги и оборачиваем в HTML-кнопки прямо в JS
-            // Регулярка /(#\w+)/g находит все слова, начинающиеся с #
-            const formattedText = text.replace(/(#\w+)/g, (match) => {
-                return `<span class="alias-btn" data-alias="${match}">${match}</span>`;
-            });
+        // 1. Сначала превращаем Markdown (жирный текст и т.д.) в HTML
+        // Если используешь библиотеку marked, вызываем её. Если нет — оставляем текст.
+        let htmlContent = typeof marked !== 'undefined' ? marked.parse(text) : text;
 
-            // 2. РЕНДЕРИНГ: Вставляем уже подготовленный безопасный HTML
-            msgDiv.innerHTML = formattedText;
+        // 2. Глобальный поиск тегов БЕЗ КАВЫЧЕК
+        // Эта регулярка находит #тег, даже если он внутри кавычек '"' и удаляет их
+        htmlContent = htmlContent.replace(/['"]?(#\w+)['"]?/g, (match, tag) => {
+            return `<span class="alias-btn" data-alias="${tag}">${tag}</span>`;
+        });
 
-            // 3. ЖИЗНЬ: Навешиваем обработчики кликов (твоя функция)
-            initAliasButtons(msgDiv);
-        } else {
-            msgDiv.innerText = text;
-        }
+        // 3. Вставляем готовый HTML в контейнер
+        msgDiv.innerHTML = htmlContent;
 
-        if (withRating) addRating(msgDiv);
+        // 4. Оживляем кнопки прямо здесь и сейчас
+        initAliasButtons(msgDiv);
+
+        // Добавляем рейтинг, если это ИИ
+        if (withRating && role === 'ai') addRating(msgDiv);
+
         chatContainer.appendChild(msgDiv);
         chatContainer.scrollTop = chatContainer.scrollHeight;
         return id;

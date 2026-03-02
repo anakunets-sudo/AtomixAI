@@ -42,7 +42,7 @@ namespace AtomixAI.Atomic.Commands
             // Передаем storageValue = null, так как мы НЕ МЕНЯЛИ данные.
             // Наш новый BaseAtomicCommand сам вызовет AtomicStorage.Link(In, Out).
             // ИИ получит в 'data' количество элементов через ExtractData(Get(In)).
-            return SetOutput(null, true, $"Successfully selected {toSelected.Count} elements.");
+            return SetOutput(null, toSelected.Count, true, $"Successfully selected {toSelected.Count} elements.");
         }
     }
 }

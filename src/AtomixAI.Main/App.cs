@@ -179,7 +179,7 @@ namespace AtomixAI.Main
                     FileName = pythonExe,
                     Arguments = $"\"{scriptPath}\"",
                     UseShellExecute = false,
-                    CreateNoWindow = false,
+                    CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     WorkingDirectory = Path.Combine(assemblyDir, "Orchestrator")

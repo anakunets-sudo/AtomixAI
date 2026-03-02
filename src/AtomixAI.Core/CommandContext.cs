@@ -22,7 +22,7 @@ namespace AtomixAI.Core
             public string CommandId { get; set; }
             public string CommandName { get; set; }
             public Dictionary<string, object> Parameters { get; set; }
-            public string ResultAlias { get; set; }
+            public string ResultTags { get; set; }
             public bool Success { get; set; }
             public string ErrorMessage { get; set; }
             public DateTime ExecutedAt { get; set; }
@@ -37,7 +37,7 @@ namespace AtomixAI.Core
             public int Index { get; set; }
             public string CommandName { get; set; }
             public Dictionary<string, object> ParamsSummary { get; set; }
-            public string ResultAlias { get; set; }
+            public string ResultTags { get; set; }
             public bool Success { get; set; }
             public string Error { get; set; }
         }
@@ -46,20 +46,20 @@ namespace AtomixAI.Core
         /// Добавить новую команду в историю
         /// </summary>
         public static void AddCommand(string commandName, Dictionary<string, object> parameters,
-            string resultAlias, bool success, string errorMessage = null, long executionTimeMs = 0)
+            string resultTags, bool success, string errorMessage = null, long executionTimeMs = 0)
         {
             lock (_lockObj)
             {
                 // Если истории больше MaxHistory - удаляем старейшую
                 if (_history.Count >= MaxHistory)
                 {
-                    var oldestAlias = _history[0].ResultAlias;
+                    var oldestTag = _history[0].ResultTags;
                     _history.RemoveAt(0);
 
                     // Удаляем старые данные из AtomicStorage
-                    if (!string.IsNullOrEmpty(oldestAlias))
+                    if (!string.IsNullOrEmpty(oldestTag))
                     {
-                        AtomicStorage.Remove(oldestAlias);
+                        AtomicStorage.Remove(oldestTag);
                     }
                 }
 
@@ -68,7 +68,7 @@ namespace AtomixAI.Core
                     CommandId = GenerateCommandId(),
                     CommandName = commandName,
                     Parameters = parameters ?? new Dictionary<string, object>(),
-                    ResultAlias = resultAlias,
+                    ResultTags = resultTags,
                     Success = success,
                     ErrorMessage = errorMessage,
                     ExecutedAt = DateTime.UtcNow,
@@ -78,7 +78,7 @@ namespace AtomixAI.Core
                 _history.Add(record);
 
                 System.Diagnostics.Debug.WriteLine(
-                    $"[CommandContext] Added: {commandName} -> {resultAlias} (Success: {success})");
+                    $"[CommandContext] Added: {commandName} -> {resultTags} (Success: {success})");
             }
         }
 
@@ -95,7 +95,7 @@ namespace AtomixAI.Core
                     Index = index,
                     CommandName = cmd.CommandName,
                     ParamsSummary = SummarizeParams(cmd.Parameters),
-                    ResultAlias = cmd.ResultAlias,
+                    ResultTags = cmd.ResultTags,
                     Success = cmd.Success,
                     Error = cmd.ErrorMessage
                 }).ToList();
@@ -113,11 +113,11 @@ namespace AtomixAI.Core
             }
         }
 
-        public static CommandRecord GetCommandByAlias(string alias)
+        public static CommandRecord GetCommandByTag(string tag)
         {
             lock (_lockObj)
             {
-                return _history.FirstOrDefault(c => c.ResultAlias == alias);
+                return _history.FirstOrDefault(c => c.ResultTags == tag);
             }
         }
 
@@ -162,7 +162,7 @@ namespace AtomixAI.Core
             foreach (var param in parameters)
             {
                 // Пропускаем ResultAlias - он не нужен в резюме
-                if (param.Key.Equals("ResultAlias", StringComparison.OrdinalIgnoreCase))
+                if (param.Key.Equals("ResultTag", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 // Для больших объектов - только тип и размер

@@ -19,13 +19,13 @@ import instructions
 LOG_FILE = "atomix_debug.log"
 # Используем "w", чтобы стереть старое содержимое при старте сессии
 with open(LOG_FILE, "w", encoding="utf-8") as f:
-    f.write(f"--- НОВАЯ СЕССИЯ: {time.ctime()} ---\n")
+    f.write(f"--- NEW SESSION: {time.ctime()} ---\n")
 def log(msg):
     # Для последующих записей используем "a", чтобы лог рос в течение сессии
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{time.strftime('%H:%M:%S')} | {msg}\n")
     print(msg)
-log("[*] Проверка зависимостей...")
+log("[*] Checking dependencies...")
 
 # --- CONFIGURATION ---
 PIPE_NAME = r'\\.\pipe\AtomixAI_Bridge_Pipe'
@@ -37,13 +37,13 @@ class RevitPipeClient:
         self.handle = None
 
     def connect(self):
-        print(f"[*] Подключение к Revit ({self.name})...")
+        print(f"[*] Connecting to Revit ({self.name})...")
         while True:
             try:
                 self.handle = win32file.CreateFile(
                     self.name, win32file.GENERIC_READ | win32file.GENERIC_WRITE,
                     0, None, win32file.OPEN_EXISTING, 0, None)
-                print("[+] Связь с Revit установлена.")
+                print("[+] Connection with Revit established.")
                 return True
             except pywintypes.error:
                 time.sleep(1)
@@ -88,146 +88,204 @@ def save_history(history):
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(to_save, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        log(f"[!] Ошибка сохранения истории: {e}")
+        log(f"[!] Error saving history: {e}")
 
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                log(f"[+] История загружена: {len(data)} сообщений.")
+                log(f"[+] History loaded: {len(data)} messages.")
                 return data
         except:
             return []
     return []
 
+def extract_summary(data_obj):
+    """Автоматически вытаскивает число и теги из любого анонимного класса."""
+    # 1. Ищем количество элементов (total_success или count)
+    count = data_obj.get("total_success") or data_obj.get("count") or "0"
+    
+    # 2. Ищем теги (из словаря tags)
+    tags_dict = data_obj.get("tags") or {}
+    tag_list = list(tags_dict.keys())
+    primary_tag = tag_list[0] if tag_list else "#result"
+    
+    return str(count), primary_tag
+
 # Инициализация при старте
 chat_history = load_history()
 
+detected_lang = None 
+
 def process_ai_logic(user_text, client):
     """
-    Основная логика: планирование цепочки (LLM) -> выполнение батча (Revit) -> отчет.
+    Оптимизированная логика: Прямая инъекция состояния Revit + Изоляция от старой истории.
+    ИИ видит только: Правила + Текущие метки в Revit + Вопрос пользователя.
     """
     global chat_history, detected_lang
-    log(">>> [LOGIC] Start processing...") # 1.
+    log(">>> [LOGIC] Start of a clean session (Stateless Mode)...")
+
+    # --- 1. АВТООПРЕДЕЛЕНИЕ ЯЗЫКА (Один раз за сессию через ИИ) ---
+    if detected_lang is None:
+        try:
+            log(">>> [LANG] Detecting the user's language...")
+            # Быстрый запрос без системных промптов
+            lang_check = ollama.chat(
+                model=MODEL_NAME,
+                messages=[{'role': 'user', 'content': f"Identify the language of this text and return ONLY the language name in English (e.g., 'Russian', 'English', 'German'): {user_text}"}]
+            )
+            detected_lang = lang_check.message.content.strip()
+            log(f">>> [LANG] Detect language: {detected_lang}")
+        except:
+            detected_lang = "English" # Дефолт при сбое
+    
     try:
-        log(">>> [LOGIC] Requesting Manual from Revit...")
-        # --- 1. СИНХРОНИЗАЦИЯ КОНТЕКСТА ---
-        # Получаем свежий мануал инструментов и состояние памяти (#теги) прямо из Revit
+        # --- 1. СИНХРОНИЗАЦИЯ С REVIT (Актуальное состояние) ---
+        # Получаем инструменты и живые метки (#), которые реально существуют в модели сейчас
         res_manual, _ = client.send_receive({"action": "get_manual"})
         res_context, _ = client.send_receive({"action": "get_context_state"})
-        log(f">>> [LOGIC] Manual received (len: {len(str(res_manual))})")
-        log(">>> [LOGIC] Context received.")
-
-        log(">>> [LOGIC] Requesting Context from Revit...")
-        dynamic_manual = res_manual.get("manual", "No tools available.")
-        current_tags = res_context.get("aliases", "No active aliases in memory.")
-
-        # --- 2. УПРАВЛЕНИЕ ИСТОРИЕЙ (Smart History) ---
-        # Оставляем последние 40 сообщений, чтобы не переполнить контекст модели
-        if len(chat_history) > 40:
-            chat_history = chat_history[-40:]
-
-        # Очищаем историю от старых системных промптов и технических отчетов 'tool'
-        # Оставляем только диалог User <-> Assistant для логики "Повтори"
-        clean_history = [m for m in chat_history if m.get('role') in ['user', 'assistant']]
-
-        # Формируем актуальный системный промпт (инъекция свежих данных)
-        system_content = (
-            f"{instructions.PROFILES['default']}\n\n"
-            f"### BIM COMMANDS REFERENCE:\n{dynamic_manual}\n\n"
-            f"### CURRENT MEMORY STATE (TAGS):\n{current_tags}\n\n"
-            f"STRICT LANGUAGE: {detected_lang}\n"
-            f"GOAL: Plan a 'sequence' of commands.\n"
-            f"MEMORY RULE: Use '#tag' for Out and In parameters to link chains.\n"
-        )
         
-        # Сборка финального пакета для отправки в ИИ
-        current_session = [{'role': 'system', 'content': system_content}] + clean_history
-        current_session.append({'role': 'user', 'content': user_text})
+        dynamic_manual = res_manual.get("manual", "Tools are not available.")
+        current_tags = res_context.get("tags", "There are no active tags in memory.")
 
-        log(f">>> [LOGIC] Calling Ollama model: {MODEL_NAME}")
-        # --- 3. ЗАПРОС К LLM (Ollama/Gemini) ---
-        # Используем format='json' для Qwen/DeepSeek для гарантированной структуры
+        # --- 2. СБОРКА СВЕЖЕГО КОНТЕКСТА (БЕЗ ИСТОРИИ) ---
+        # Мы НЕ используем chat_history для Ollama, чтобы она не копировала старые ошибки.
+        # Формируем промпт "Золотая рыбка": Правила + Текущая ситуация.
+        
+        system_rules = instructions.PROFILES['default']
+        
+        # Инъекция живого состояния Revit прямо перед вопросом
+        revit_state = (
+            f"### CURRENT REVIT STATE (TAGS):\n{current_tags}\n\n"
+            f"### AVAILABLE BIM TOOLS:\n{dynamic_manual}\n\n"
+            f"STRICT LANGUAGE: Respond ONLY in {detected_lang}."
+        )
+
+        # Формируем пакет сообщений: Инструкции -> Состояние -> Вопрос
+        current_session = [
+            {'role': 'system', 'content': system_rules},
+            {'role': 'system', 'content': revit_state},
+            {'role': 'user', 'content': user_text}              
+        ]
+
+        # --- 3. ЗАПРОС ПЛАНА У LLM ---
+        log(f">>> [LOGIC] Request from {MODEL_NAME}...")
         response = ollama.chat(
             model=MODEL_NAME,
             messages=current_session,
-            format='json',
-            options={
-                'num_ctx': 8192,         # Размер контекста
-                'repeat_penalty': 1.2,   # Штраф за повторы
-                'top_k': 20,             # Ограничение выборки
-                'top_p': 0.5,            # Nucleus sampling
-                'num_predict': 512,      # Макс. длина ответа
-                'temperature': 0.0       # Детерминированность
-            }
+            format='json', # Гарантируем JSON структуру {thought, sequence}
+            options={'num_ctx': 8192, 'temperature': 0.0}
         )
-        log(">>> [LOGIC] Ollama response received!")
-
-        ai_raw = response.message.content
-        data = json.loads(ai_raw)
         
-        # Извлекаем компоненты ответа
-        ai_thought = data.get("thought", "Planning completion...")
-        ai_sequence = data.get("sequence", []) # Это база для функции "Повтори"
+        data = json.loads(response.message.content)
+        ai_thought = data.get("thought", "Обработка...")
+        ai_sequence = data.get("sequence", [])
 
-        log(f">>> [LOGIC ai_thought] {ai_thought}")
-        log(f">>> [LOGIC ai_sequence] {ai_sequence}")
+        log(f">>> [LOGIC] Thought : {ai_thought}")
+        log(f">>> [LOGIC] Sequence : {ai_sequence}")
 
-        # --- 4. ВЫПОЛНЕНИЕ ЦЕПОЧКИ (Batch Execution) ---
-        if ai_sequence and len(ai_sequence) > 0:
-            log(f"[*] Sending batch to Revit: {len(ai_sequence)} steps...")
+        # --- 4. ВЫПОЛНЕНИЕ В REVIT (Batch Mode) ---
+        execution_result = {"success": False, "message": "No action taken"}
+        
+        if ai_sequence:
+            log(f"[*] Sending the sequence to Revit: {len(ai_sequence)} шагов...")
+            # Отправляем весь пакет команд одной транзакцией
+            revit_res, _ = client.send_receive({"action": "call_batch", "sequence": ai_sequence})
             
-            # Отправляем весь массив команд одним экшеном
-            payload = {"action": "call_batch", "sequence": ai_sequence}
-            revit_res, _ = client.send_receive(payload)
-            
-            # Ожидание результата через механизм Ping (Polling)
-            execution_result = {"success": False, "message": "Revit timeout"}
-            if revit_res and "batch_queued" in revit_res.get("status", ""):
-                log("[*] Sequence in progress... Waiting for Revit signal.")
-                while True:
+            # Ожидание результата через PING (Polling)
+            if revit_res and "batch_queued" in str(revit_res.get("status", "")):
+                # Ждем "Квитанцию" (AtomicResult) от Revit
+                for _ in range(100): # Тайм-аут ~30 секунд
+                    time.sleep(0.3)
                     poll_res, ui_event = client.send_receive({"action": "ping"})
                     
-                    # Ищем маркер завершения батча в ui_event или основном ответе
+                    # Ищем маркер завершения батча в ответе
                     res = ui_event if ui_event else poll_res
                     if res and res.get("action") == "tool_execution_result":
-                        execution_result = res
+                        execution_result = res # Это наш плоский AtomicResult с Message и Data
                         break
-                    
-                    time.sleep(0.3) # Пауза между опросами
             
-            # --- 5. ФИКСАЦИЯ В ИСТОРИИ (Для ГИПа) ---
-            chat_history.append({'role': 'user', 'content': user_text})
-            
-            # Записываем ответ ИИ с сохранением "сырых" команд для будущего "Повтори"
-            chat_history.append({
-                'role': 'assistant', 
-                'content': ai_thought,
-                'raw_sequence': ai_sequence, # Скрытые данные для Суперкоманды
-                'execution_status': 'success' if execution_result.get('success') else 'failed'
-            })
-            
-            # Сохраняем на диск (atomix_history.json)
-            save_history(chat_history)
-            
-            # Финальный отчет пользователю
-            status_emoji = "✅" if execution_result.get("success") else "❌"
-            return f"{ai_thought}\n\n{status_emoji} **Revit Report:** {execution_result.get('message')}"
-        
-        else:
-            # Если команд нет, просто текстовый ответ
-            chat_history.append({'role': 'user', 'content': user_text})
-            chat_history.append({'role': 'assistant', 'content': ai_thought})
-            save_history(chat_history)
-            return ai_thought
+            # --- 5. ФИКСАЦИЯ ТОЛЬКО УДАЧНЫХ ОПЕРАЦИЙ ---
+            # Мы пишем в историю только для внешнего лога/повтора, ИИ это не увидит в след. раз
+            if execution_result.get("success"):
+                log("[+] Success. Saving to the session log.")
+                chat_history.append({
+                    'role': 'user', 'content': user_text, 
+                    'sequence': ai_sequence, 'status': 'success'
+                })
+                save_history(chat_history)
+            else:
+                log("[!] Execution error. Not adding to log history.")
 
-    except json.JSONDecodeError as je:
-        log(f"[!] AI JSON Error: {je}")
-        return "The AI generated an invalid sequence format. Please try rephrasing."
+            SYSTEM_PROMPT = (
+                    f"### ROLE: Professional Revit Assistant"
+                    f"### TASK: Humanize technical Revit reports."
+                    f"### RULES:"
+                    f"1. Language: {detected_lang}.\n"
+                    f"2. BREVITY: Past tense, one short sentence only. No intros like 'Successfully', 'Steps completed', 'Report' or  'OK'.\n"                    
+                    f"3. NO LISTS: Do not use bullet points, steps, numbered lists or status OK.\n"
+                    f"4. PLAIN TEXT ONLY: Write one natural sentence in plain text, with BRIEF CONCLUSIONS."
+            )
+            # --- 6. ФИНАЛЬНЫЙ ОТЧЕТ ---
+            if execution_result.get("success"):
+                # 1. Заранее подготавливаем очень жесткий системный промпт
+                SYSTEM_PROMPT += (
+                    f"5. VARIABLE TAGS: IF message contains tags that begin with the '#' symbol (e.g., #tag) you MUST include ONLY unique tags from message to FINAL result.\n"
+                    f"6. NO GHOST TAGS: Never mention a tag in your response (e.g., #tag) that were not specified in the message.\n"
+                    f"7 SYNC: If the message contains a specific tag (e.g., #tag), you MUST use that tag, NOT a generic one.\n"
+                    
+                )
+            else:
+                SYSTEM_PROMPT += (                    
+                    f"5. DO NOT include '#' symbols in your answer. Describe the error briefly.\n"
+                )
+
+            # 2. Оптимизированный вызов
+            final_word = ollama.chat(
+                model=MODEL_NAME,
+                messages=[
+                    {'role': 'system', 'content': SYSTEM_PROMPT},
+                    {'role': 'user', 'content': f"Format this report: {execution_result.get('message')}"}
+                ],
+                options={
+                    "num_predict": 100,      # Жестко ограничиваем количество токенов (не даст Квен "болтать")
+                    "temperature": 0.0,     # Снижаем креативность для скорости
+                    "top_p": 0.9,
+                    #"stop": ["\n", "###"]   # Моментальный стоп при попытке начать новый абзац
+                }
+            )
+
+            return f"{final_word.message.content}"
+
+            #status_emoji = "✅" if execution_result.get("success") else "❌"
+            # Возвращаем склеенный Message из Revit + мысли ИИ
+            #return f"{ai_thought}\n\n{status_emoji} **Revit Report:** {execution_result.get('message')}"
+
+            ##########################
+
+            """if execution_result.get("success"):
+                log("[+] Успех. Сохраняем в лог сессии.")
+                chat_history.append({
+                    'role': 'user', 'content': user_text, 
+                    'sequence': ai_sequence, 'status': 'success'
+                })
+                save_history(chat_history)
+            else:
+                log("[!] Ошибка выполнения. В историю лога не добавляем.")
+
+            # --- 6. ФИНАЛЬНЫЙ ОТЧЕТ ---
+            # Достаем данные из анонимного класса, который пришел из C#
+            count, tag = extract_summary(execution_result.get("data", {}))
+            final_answer = ai_thought.replace("[COUNT]", count).replace("[TAG]", tag)
+    
+            return f"{final_answer}"""
+        
+            #return ai_thought
+
     except Exception as e:
-        log(f"[CRITICAL] Logic failed: {e}")
-        return f"System Error: {str(e)}"
+        log(f"[CRITICAL] Logic Crash: {e}")
+        return f"Системная ошибка: {str(e)}"
 
 def main():
     client = RevitPipeClient(PIPE_NAME)

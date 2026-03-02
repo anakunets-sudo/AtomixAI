@@ -16,18 +16,24 @@ namespace AtomixAI.Atomic.Commands
         [AtomicParam("Unique command name.")]
         public string CommandId => this.GetType().GetCustomAttribute<AtomicInfoAttribute>()?.Name;
 
-        [AtomicParam("INPUT_PORT: Accepts a data tag. Defaults to '_last'.")]
-        public string In { get; set; } = "_last";
+        [AtomicParam("INPUT_PORT: Accepts a data tag. If the user points to a specific tag (e.g. #wall_1), USE IT EXACTLY. Defaults to '#_last'.")]
+        public string In { get; set; } = "#_last";
 
-        [AtomicParam("OUTPUT_PORT: Creates a new data tag.")]
+        [AtomicParam("OUTPUT_PORT: Creates a NEW unique data tag.")]
         public string Out { get; set; }
 
         // --- ВХОД (ДАННЫЕ ИЗ ХРАНИЛИЩА) ---
-        protected AtomicResult GetInput<T>(out T value)
+        protected AtomicResult GetInput<T>(out T value, string? input = null)
         {
             value = default;
-            string activeIn = string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase)
-                ? "_last" : In;
+
+            string activeIn = input;
+
+            if (input == null)
+            {
+                activeIn = string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase)
+                    ? "#_last" : In;
+            }
 
             var rawData = AtomicStorage.Get(activeIn);
 
@@ -108,6 +114,18 @@ namespace AtomixAI.Atomic.Commands
                     // РЕЖИМ SET: В хранилище ВСЕГДА кладем ОРИГИНАЛ (storageValue), а не число!
                     AtomicStorage.Set(Out, storageValue);
                 }
+            }
+
+            // Определяем "активный" тэг для этой операции (Out в приоритете)
+            string activeTag = !string.IsNullOrWhiteSpace(Out) && !Out.Equals("none") ? Out : In;
+            if (!string.IsNullOrEmpty(message) && !message.Contains(activeTag))
+            {
+                message = $"[{activeTag}]: {message}";
+            }
+
+            if (!string.IsNullOrEmpty(message) && !success)
+            {
+                message = $"[Error]: {message}";
             }
 
             // Возвращаем результат, где Data — это число для ИИ, а в Storage уже лежит список

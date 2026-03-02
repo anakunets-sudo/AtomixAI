@@ -33,9 +33,14 @@ namespace AtomixAI.Atomic.Commands
             if (!result.Success) 
             {
                 result = GetInput(out ElementId inputData);
-
-                if (!result.Success) return result;
-                else toSelected = new List<ElementId> { inputData };
+                if (!result.Success)
+                {
+                    return result;
+                }
+                else
+                {
+                    toSelected = new List<ElementId> { inputData };
+                }
             }
             else
             {
@@ -44,24 +49,24 @@ namespace AtomixAI.Atomic.Commands
 
             if (toSelected != null)
             {
-                var exclude =  AtomicStorage.Get(Exclude);
+                result = GetInput(out List<ElementId> exclude, Exclude);
 
-                if (exclude is ElementId id)
+                if (!result.Success)
                 {
-                    toSelected = toSelected.Except(new ElementId[] { id }).ToList();
+                    return result;
                 }
-                else if (exclude is List<ElementId> ids)
+                else
                 {
-                    toSelected = toSelected.Except(ids).ToList();
+                    toSelected = toSelected.Except(exclude).ToList();
                 }
 
                 handler.UIDoc.Selection.SetElementIds(toSelected);
 
-                return SetOutput(toSelected, true, $"Selected {toSelected.Count} elements. Stored in '{Out}'.");
+                return SetOutput(toSelected, toSelected.Count, true, $"Selected {toSelected.Count} elements. Stored in '{Out}'.");
             }
             else
             {
-                return SetOutput(null, true);
+                return SetOutput(null, 0, false);
             }
         }
     }

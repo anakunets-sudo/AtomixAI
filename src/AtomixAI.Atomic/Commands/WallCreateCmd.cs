@@ -45,12 +45,12 @@ namespace AtomixAI.Atomic.Commands
 
             if (createdWallId == null || createdWallId == ElementId.InvalidElementId)
             {
-                return SetOutput(null, false, "Wall creation failed (Invalid ID).");
+                return SetOutput(null, 0, false, "Wall creation failed (Invalid ID).");
             }
 
             Debug.WriteLine($"[WallCreateCmd] Финальная проверка перед возвратом. ID: {createdWallId}");
 
-            return SetOutput(createdWallId, true, "1 wall created successfully.");
+            return SetOutput(createdWallId, 1, true, $"1 wall created successfully as {this.Out}.");
         }
     }
 }

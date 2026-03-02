@@ -140,8 +140,8 @@ namespace AtomixAI.Bridge
                 // Логика 'In' по умолчанию
                 if (!parameters.ContainsKey("In") || string.IsNullOrEmpty(parameters["In"]?.ToString()))
                 {
-                    parameters["In"] = "_last";
-                    Debug.WriteLine("[DISPATCHER] ℹ 'In' was empty, auto-assigned to '_last'");
+                    parameters["In"] = "#_last";
+                    Debug.WriteLine("[DISPATCHER] ℹ 'In' was empty, auto-assigned to '#_last'");
                 }
 
                 // 3. Создание инстанса команды (теперь безопасно)
@@ -149,45 +149,6 @@ namespace AtomixAI.Bridge
 
                 // Маппинг свойств из JSON в объект команды
                 MapProperties(instance, parameters);
-
-                /*
-                // 4. ВЫПОЛНЕНИЕ в безопасном контексте транзакций Revit
-                AtomicResult result = TransactionManager.ExecuteSafe(toolId, () => {
-                    return instance.Execute(parameters);
-                });
-                
-                // 5. Обработка результатов и хранилища (Storage)
-                if (result != null && result.Success)
-                {
-                    string outKey = parameters.ContainsKey("Out") ? parameters["Out"].ToString() : null;
-
-                    // Если команда не реализует BaseAtomicCommand (где логика SetOutput встроена)
-                    // Но мы все равно хотим сохранить результат
-                    if (result.Data != null && !string.IsNullOrEmpty(outKey))
-                    {
-                        AtomicStorage.Set(outKey, result.Data);
-                        Debug.WriteLine($"[DISPATCHER] 💾 New data saved to storage: {outKey}");
-                    }
-                }
-
-                // 6. Отправка обратной связи в Python через McpHost
-                if (_mcpHost != null && result != null)
-                {
-                    var feedback = new
-                    {
-                        action = "tool_execution_result",
-                        tool = toolId,
-                        success = result.Success,
-                        message = result.Message,
-                        data = result.Data
-                    };
-
-                    _mcpHost.BroadcastToClients(JsonConvert.SerializeObject(feedback));
-                    Debug.WriteLine($"[DISPATCHER] ✓ Feedback sent to Python: {result.Message}");
-                }
-
-                return result;
-                */
 
                 return instance.Execute(parameters);
             }

@@ -34,7 +34,7 @@ using System.Text;
                         if (paramAttr == null) continue;
 
                         string extraHint = "";
-                        if (prop.Name == "In") extraHint = " (Use '#tag' or '_last')";
+                        if (prop.Name == "In") extraHint = " (Use '#tag' or '#_last')";
                         else if (prop.Name == "Out") extraHint = " (Create new '#tag')";
 
                         // ОПРЕДЕЛЕНИЕ ТИПА (С поддержкой JSON Schema / Gemini)
@@ -118,7 +118,7 @@ using System.Text;
                 sb.AppendLine("1. **Think First**: Analyze the user request. Is it a QUERY (find/show) or an ACTION (create/modify)?");
                 sb.AppendLine("2. **Minimalism**: DO NOT use 'Construction' or 'Modification' tools unless the user explicitly asked to change the model.");
                 sb.AppendLine("3. **Batching**: Return a SINGLE JSON object with a 'sequence' array. Searching for elements is a valid standalone sequence.");
-                sb.AppendLine("4. **Data Linking**: Use '#tag_name' to pass data. Set 'Out' in step 1, use as 'In' in step 2.");
+                sb.AppendLine("4. **Data Linking**: Use '#tag_name_1' to pass data. Set 'Out' in step 1, use as 'In' in step 2.");
                 sb.AppendLine("5. **Atomic Units**: All lengths MUST include units (e.g., '5000mm', '150mm').");
                 sb.AppendLine("6. **Context Awareness**: Use 'get_context_state' to see what elements are already saved in memory tags.");
 
@@ -187,22 +187,22 @@ using System.Text;
                 return sb.ToString();
             }
 
-            public static string GetActiveContentStateAliases()
+            public static string GetActiveContentStateTags()
             {
                 // Используем твой метод GetCurrentContext()
-                var activeAliases = AtomicStorage.GetCurrentContext();
+                var activeTags = AtomicStorage.GetCurrentContext();
 
-                if (activeAliases.Length == 0)
+                if (activeTags.Length == 0)
                     return "CURRENT REBIT MEMORY: [Empty]. You must use 'Out' to save data first.";
 
                 StringBuilder sb = new StringBuilder();
-                sb.AppendLine("### ACTIVE BIM ALIASES IN MEMORY:");
-                foreach (var alias in activeAliases)
+                sb.AppendLine("### ACTIVE BIM TAGS IN MEMORY:");
+                foreach (var tag in activeTags)
                 {
-                    var data = AtomicStorage.Get(alias);
+                    var data = AtomicStorage.Get(tag);
                     // Достаем тип данных для ИИ (Wall, List, и т.д.)
                     string typeName = data?.GetType().Name ?? "Unknown";
-                    sb.AppendLine($"- '{alias}' (Type: {typeName})");
+                    sb.AppendLine($"- '{tag}' (Type: {typeName})");
                 }
                 return sb.ToString();
             }

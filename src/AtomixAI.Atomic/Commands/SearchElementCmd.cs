@@ -54,7 +54,7 @@ namespace AtomixAI.Atomic.Commands
             // 3. Управление ВЫХОДОМ (Out)
             if (elementIds.Count == 0)
             {
-                return SetOutput(null, true); //false если ошибка если оборавать код, иначе он продолжится в цепочке
+                return SetOutput(null, 0, false); //false если ошибка если оборавать код, иначе он продолжится в цепочке
             }
 
             Debug.WriteLine($"[{this.GetType().Name}] elementIds: {elementIds.ToString()}");
