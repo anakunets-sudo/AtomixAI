@@ -87,7 +87,7 @@ namespace AtomixAI.Main.UI
         {
             bool isDark = false;
 #if REVIT2025_OR_GREATER
-    isDark = Autodesk.Revit.UI.UIThemeManager.CurrentTheme == Autodesk.Revit.UI.UITheme.Dark;
+            isDark = Autodesk.Revit.UI.UIThemeManager.CurrentTheme == Autodesk.Revit.UI.UITheme.Dark;
 #else
             // Для 2019-2024: проверяем яркость фона чертежа
             var col = uiapp.Application.BackgroundColor;

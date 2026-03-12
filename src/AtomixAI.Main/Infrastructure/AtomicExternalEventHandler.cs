@@ -34,15 +34,7 @@ namespace AtomixAI.Main.Infrastructure
             {
                 var task = CommandQueue.Dequeue();
 
-                AtomicResult finalResult =  _dispatcher.DispatchSequence(task.JsonArgs);
-                /*else
-                {
-                    // Одиночная команда
-                    finalResult = _dispatcher.Dispatch(task.ToolId, task.JsonArgs);
-                }*/
-
-                // ЕДИНАЯ ТОЧКА ОТЧЕТА:
-                // Теперь ИИ получает ровно ОДИН ответ на свой ОДИН запрос (будь то call или call_batch)
+                AtomicResult finalResult = _dispatcher.DispatchSequence(task.JsonArgs);
 
                 Debug.WriteLine($"[AtomicExternalEventHandler] finalResult: {finalResult.ToString()}");
 

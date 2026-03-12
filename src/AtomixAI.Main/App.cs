@@ -8,6 +8,8 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -33,7 +35,7 @@ namespace AtomixAI.Main
                 }
 
                 // 1. Инициализируем ToolDispatcher (укажите ваш путь к папке со скриптами Python)
-                var _dispatcher = new ToolDispatcher(@"C:\AtomixAI\Scripts");                
+                var _dispatcher = new ToolDispatcher(@"C:\AtomixAI\Scripts");
 
                 // 2. Создаем обработчик (пока без хоста, чтобы избежать ошибки конструктора)
                 _handler = new AtomicExternalEventHandler(_dispatcher);

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>AtomixAI Search + Drill-down</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; color: white; height: 100vh; display: flex; justify-content: center; align-items: center; margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; }
+        .item-active { background-color: #2563eb; color: white; border-left: 4px solid #fff; }
+        input:focus { outline: none; }
+    </style>
+</head>
+<body>
+
+    <div class="w-96 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div id="header" class="p-3 bg-gray-800 text-[10px] uppercase tracking-widest text-blue-400 font-bold border-b border-gray-700">
+            AtomixAI / Main
+        </div>
+
+        <!-- Search Input -->
+        <div class="p-2 bg-gray-900 border-b border-gray-800">
+            <input type="text" id="search-input" placeholder="Поиск (300ms debounce)..." 
+                   class="w-full bg-gray-800 text-sm text-gray-200 p-2 rounded border border-gray-700 focus:border-blue-500">
+        </div>
+        
+        <!-- List Container -->
+        <div id="menu-list" class="p-2 min-h-[250px] max-h-[400px] overflow-y-auto">
+            <!-- JS inserts items here -->
+        </div>
+
+        <!-- Footer -->
+        <div class="p-2 bg-gray-800/50 text-[9px] text-gray-500 flex justify-between px-4 border-t border-gray-700">
+            <span>↑↓ Навигация</span>
+            <span>ENTER / → Выбрать</span>
+            <span>ESC / ← Назад</span>
+        </div>
+    </div>
+
+    <script>
+        const DATA = {
+            'root': { title: 'Main', items: [
+                { id: 'sel', label: '🟦 Selection (3)', hasChildren: true },
+                { id: 'view', label: '👁️ Active View', hasChildren: true },
+                { id: 'all', label: '🏗️ All Elements', hasChildren: true }
+            ]},
+            'sel': { title: 'Selection', items: [
+                { id: 'w1', label: 'Wall: Basic Wall 200mm', hasChildren: true },
+                { id: 'w2', label: 'Wall: Curtain Wall', hasChildren: true },
+                { id: 'd1', label: 'Door: Single 900x2100', hasChildren: true }
+            ]},
+            'w1': { title: 'Wall Params', items: [
+                { id: 'p1', label: 'Height: 3000', hasChildren: false },
+                { id: 'p2', label: 'Volume: 12.5 m3', hasChildren: false }
+            ]}
+        };
+
+        let history = ['root'];
+        let cursor = 0;
+        let searchQuery = "";
+        let debounceTimer;
+
+        const listContainer = document.getElementById('menu-list');
+        const header = document.getElementById('header');
+        const searchInput = document.getElementById('search-input');
+
+        // Функция фильтрации
+        function getFilteredItems() {
+            const currentKey = history[history.length - 1];
+            const allItems = DATA[currentKey]?.items || [];
+            if (!searchQuery) return allItems;
+            
+            return allItems.filter(item => 
+                item.label.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+
+        function render() {
+            const currentKey = history[history.length - 1];
+            const items = getFilteredItems();
+            
+            header.innerText = 'AtomixAI / ' + history.map(h => DATA[h]?.title).join(' / ');
+            listContainer.innerHTML = '';
+
+            if (items.length === 0) {
+                listContainer.innerHTML = '<div class="p-4 text-center text-gray-600 text-sm">Ничего не найдено...</div>';
+                return;
+            }
+
+            items.forEach((item, i) => {
+                const div = document.createElement('div');
+                div.className = `p-3 mb-1 rounded flex justify-between items-center cursor-pointer transition-all ${i === cursor ? 'item-active shadow-lg' : 'hover:bg-gray-800 text-gray-400'}`;
+                div.innerHTML = `
+                    <span class="text-sm font-medium">${item.label}</span>
+                    ${item.hasChildren ? '<span class="opacity-30">→</span>' : ''}
+                `;
+                div.onclick = () => navigateTo(item);
+                listContainer.appendChild(div);
+            });
+        }
+
+        function navigateTo(item) {
+            if (item && item.hasChildren && DATA[item.id]) {
+                history.push(item.id);
+                cursor = 0;
+                searchQuery = "";
+                searchInput.value = "";
+                render();
+            }
+        }
+
+        function goBack() {
+            if (history.length > 1) {
+                history.pop();
+                cursor = 0;
+                searchQuery = "";
+                searchInput.value = "";
+                render();
+            }
+        }
+
+        // --- Обработка Поиска с Debounce ---
+        searchInput.oninput = (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                searchQuery = e.target.value;
+                cursor = 0; // Сбрасываем курсор при поиске
+                render();
+                console.log("Отправка запроса в Revit API для поиска:", searchQuery);
+            }, 300); // 300мс пауза
+        };
+
+        window.onkeydown = (e) => {
+            const items = getFilteredItems();
+
+            if (e.key === 'ArrowDown') {
+                cursor = Math.min(cursor + 1, items.length - 1);
+                render();
+                e.preventDefault(); // Чтобы страница не скроллилась
+            } else if (e.key === 'ArrowUp') {
+                cursor = Math.max(cursor - 1, 0);
+                render();
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                navigateTo(items[cursor]);
+            } else if (e.key === 'ArrowLeft' || e.key === 'Escape') {
+                goBack();
+            }
+        };
+
+        render();
+    </script>
+</body>
+</html>
