@@ -5,7 +5,7 @@ window.Atomix.MenuController = {
     get listContainer() { return document.getElementById('menu-items'); },
     items: [],
     history: [], // Стек состояний: [{ items: [], index: 0, title: '' }]
-    selectedIndex: 0,
+    selectedIndex: -1,
     loadingIndex: -1,
     isOpen: false,
     currentTitle: 'BIM Context',
@@ -20,24 +20,29 @@ window.Atomix.MenuController = {
         }
         if (title) this.currentTitle = title;
         this.items = (newItems && newItems.length) ? newItems : this._getDefaultItems();
-        // При переходе вглубь сбрасываем на 0 (первый элемент списка)
-        if (!isBackAction) this.selectedIndex = 0;
+        // На верхнем уровне ничего не выделено (-1), в подменю — первый пункт
+        if (!isBackAction) this.selectedIndex = this.history.length > 0 ? 0 : -1;
         this.loadingIndex = -1;
         this.render();
         this.show();
     },
     _getDefaultItems() {
+        const t = window.Atomix.t;
         return [
-            { id: 'recent', name: '🕒 Recent', hasChildren: true },
-            { id: 'selection', name: '🔍 Selection', hasChildren: true },
-            { id: 'commands', name: '⚡ Commands', hasChildren: true }
+            { id: 'recent', name: `<span class="menu-icon">🕒</span> ${t('menu.recent', 'Recent')}`, hasChildren: true },
+            { id: 'selection', name: `<span class="menu-icon">🔍</span> ${t('menu.selection', 'Selection')}`, hasChildren: true },
+            { id: 'commands', name: `<span class="menu-icon">⚡</span> ${t('menu.commands', 'Commands')}`, hasChildren: true }
         ];
     },
-    _splitLeadingIcon(name) {
+    _withIconSpan(name) {
         const text = String(name || '');
+        if (text.includes('class="menu-icon"')) return text;
         const match = text.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s+([\s\S]*)$/u);
-        if (!match) return { icon: '', label: text };
-        return { icon: match[1], label: match[2] };
+        if (!match) return text;
+        return `<span class="menu-icon">${match[1]}</span> ${match[2]}`;
+    },
+    _plainName(name) {
+        return String(name || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
     },
     drillDown() {
         if (this.selectedIndex === -1) {
@@ -49,7 +54,7 @@ window.Atomix.MenuController = {
 
         if (item.hasChildren) {
             this.history.push({ items: [...this.items], index: this.selectedIndex, title: this.currentTitle });
-            this.currentTitle = item.name;
+            this.currentTitle = this._plainName(item.name);
             this.loadingIndex = this.selectedIndex;
             this.render();
 
@@ -58,9 +63,6 @@ window.Atomix.MenuController = {
             // МОДИФИКАЦИЯ: Если это конечный параметр — прячем меню и генерируем чипс            
             if (item.meta) {
                 window.Atomix.ChipsController.create(item);
-            } else if (item.id === "action_pick_objects") {
-                // Задел под интерактивный выбор элементов в Revit, если selection был пуст
-                window.Atomix.RevitBridge.send('PICK_ELEMENTS_REQUEST');
             }
             this.hide();
         }
@@ -90,20 +92,22 @@ window.Atomix.MenuController = {
         if (!this.listContainer) return;
         let html = "";
         const hasHistory = this.history.length > 0;
-        // Логика подсветки заголовка
-        const isHeaderSelected = (this.selectedIndex === -1 && hasHistory) ? 'selected' : '';
-        const arrow = hasHistory ? '← ' : '';
-        html += `<div class="menu-header ${hasHistory ? 'can-go-back' : ''} ${isHeaderSelected}" id="menu-header-back"> ${arrow}${this.currentTitle} </div>`;
+        if (hasHistory) {
+            const isHeaderSelected = this.selectedIndex === -1 ? 'selected' : '';
+            html += `<div class="menu-back-row ${isHeaderSelected}" id="menu-header-back" title="${this.currentTitle}"><span class="menu-back">&#xE76B;</span><span class="menu-label">${window.Atomix.t('menu.back', 'Back')}</span><span class="menu-kbd">Esc</span></div>`;
+        }
         // Список элементов
         html += this.items.map((item, i) => {
             const isSel = i === this.selectedIndex ? 'selected' : '';
             const isLoad = i === this.loadingIndex;
-            const parts = this._splitLeadingIcon(item.name);
-            const icon = isLoad ? '⏳' : parts.icon;
-            const label = isLoad ? `${parts.label}...` : parts.label;
-            const iconHtml = icon ? `<span class="menu-icon">${icon}</span>` : '';
-            const arrowIcon = (item.hasChildren && !isLoad) ? '<span class="menu-arrow">→</span>' : '';
-            return `<div class="menu-item ${isSel}" data-index="${i}">${iconHtml}<span class="menu-label">${label}</span>${arrowIcon}</div>`;
+            let label = this._withIconSpan(item.name);
+            if (isLoad) {
+                label = label.includes('class="menu-icon"')
+                    ? label.replace(/<span class="menu-icon">[\s\S]*?<\/span>/, '<span class="menu-icon">⏳</span>') + '...'
+                    : `<span class="menu-icon">⏳</span> ${label}...`;
+            }
+            const arrowIcon = (item.hasChildren && !isLoad) ? '<span class="menu-arrow">&#xE76C;</span>' : '';
+            return `<div class="menu-item ${isSel}" data-index="${i}">${label}${arrowIcon}</div>`;
         }).join('');
         this.listContainer.innerHTML = html;
         this._attachEvents();

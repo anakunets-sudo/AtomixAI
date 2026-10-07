@@ -13,6 +13,7 @@
     --border: #e0e0e0;
     --input-bg: #ffffff;
     --scroll-thumb: #cccccc;
+    --menu-arrow: #999;
 }
 
 [data-theme='dark'] {
@@ -29,6 +30,7 @@
     --border: #485363;
     --input-bg: #222933;
     --scroll-thumb: #555555;
+    --menu-arrow: #999;
 }
 
 body {
@@ -199,7 +201,7 @@ body {
     background: var(--input-bg);
     width: calc(100% - 20px);
     overflow: hidden;
-    padding: 8px 8px 44px 8px;
+    padding: 8px 10px 44px 8px;
     border: 1px solid var(--border);
     border-radius: 12px;
     transition: border-color 0.2s;
@@ -269,48 +271,57 @@ textarea,
 .menu-hidden {
     display: none;
 }
-#ai-menu {
-    border: 1px solid var(--accent);
-    margin: 10px 8px -43px 6px;
+#ai-menu {    
+    border: 1px solid var(--border);
+    margin: 10px 6px -14px 6px;
     padding: 0 0 18px 0;
+    background: var(--input-bg);
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    font-size: 14px;
+    font-family: "Segoe UI Symbol", "Segoe UI", Arial, sans-serif;
+}
+
+.menu-back-row {
+    display: flex;
+    align-items: center;
+    margin: 4px 4px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+}
+
+    .menu-back-row.selected, .menu-back-row:hover {
+        background: var(--border);
+    }
+
+    .menu-back-row .menu-back {
+        color: var(--menu-arrow);
+    }
+
+    .menu-back-row .menu-label {
+        flex: 1;
+    }
+
+.menu-kbd {
+    font-size: 11px;
+    line-height: 16px;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--menu-arrow);
     background: var(--input-bg);
 }
 
-.menu-header {
-    background: var(--accent);
-    color: #fff;
-    padding: 8px 10px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: default;
-    user-select: none;
-    margin: -10px -1px 4px -1px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 9px;
-}
-
-    .menu-header.can-go-back {
-        cursor: pointer;
-        background: var(--accent);
-        border-top-left-radius: 9px;
-        border-top-right-radius: 9px;
-    }
-
-.menu-header.can-go-back:hover {
-    background: #005a9e;
-}
-        .menu-header.selected, .menu-header.can-go-back:hover {
-            background: #0078d7 !important; /* Цвет как у активного пункта меню */
-            color: var(--text) !important;
-        }
-
 .menu-item.selected {
-    background: var(--bg);
+    background: var(--border);
     color: var(--text);
     border-radius: 6px;
 }
 .menu-item:hover {
-    background: var(--bg);
+    background: var(--border);
     border-radius: 6px;
 }
 /*.menu-item.selected:hover {
@@ -318,6 +329,8 @@ textarea,
 }*/
 
     .menu-item, .menu-item.selected {
+        display: flex;
+        align-items: center;
         cursor: pointer;
         margin: 4px 4px;
         padding: 4px 6px;
@@ -325,10 +338,27 @@ textarea,
 
     .menu-icon {
         display: inline-block;
+        margin-right: 10px;
+        font-size: 12px;
     }
 
     .menu-arrow {
-        float: right;
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        font-family: 'Segoe MDL2 Assets';
+        font-size: 12px;
+        line-height: 1;
+        color: var(--menu-arrow);
+    }
+
+    .menu-back {
+        display: inline-flex;
+        align-items: center;
+        font-family: 'Segoe MDL2 Assets';
+        font-size: 12px;
+        line-height: 1;
+        margin-right: 10px;
     }
 
     .item-loading {

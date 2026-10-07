@@ -28,6 +28,11 @@ namespace AtomixAI.Main
         {
             try
             {
+                string i18nDir = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "wwwroot", "i18n");
+                var uiCulture = System.Threading.Thread.CurrentThread.CurrentUICulture;
+                AtomixAI.Core.Localizer.Initialize(i18nDir, uiCulture);
+                Debug.WriteLine($"[i18n] CurrentUICulture={uiCulture.Name}, loaded={AtomixAI.Core.Localizer.Language}");
+
                 //if (!System.Diagnostics.Debugger.IsAttached)
                 {
                     StartEmbeddedOrchestrator();
@@ -163,16 +168,16 @@ namespace AtomixAI.Main
             catch
             {
             } // Создаем вкладку, если её нет
-            RibbonPanel panel = a.CreateRibbonPanel(tabName, "Tools");
+            RibbonPanel panel = a.CreateRibbonPanel(tabName, AtomixAI.Core.Localizer.T("ribbon.panel"));
             // Путь к текущей DLL
             string assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
             // Создаем кнопку, которая вызывает наш класс ShowAiPane (из Command.cs)
             PushButtonData btnData = new PushButtonData(
-            "Show Pane", "Open AI\nChat", assemblyPath,
+            "Show Pane", AtomixAI.Core.Localizer.T("ribbon.openChat"), assemblyPath,
             "AtomixAI.Main.ShowPane" // Полное имя класса с пространством имен!
             );
             PushButton btn = panel.AddItem(btnData) as PushButton;
-            btn.ToolTip = "Open the AI control panel"; // Можно добавить иконку (32x32)
+            btn.ToolTip = AtomixAI.Core.Localizer.T("ribbon.openChat.tooltip"); // Можно добавить иконку (32x32)
                                                        // btn.LargeImage = new BitmapImage(new Uri("pack://application:,,,/YourAssembly;component/Resources/ai_icon.png"));
         }
         private void StartEmbeddedOrchestrator()
@@ -258,10 +263,15 @@ namespace AtomixAI.Main
                                 {
                                     var text = await reader.ReadLineAsync();
                                     if (!string.IsNullOrEmpty(text))
-                                    { // Вбрасываем текст прямо в JS через Dispatcher
+                                    {
+                                        var json = Newtonsoft.Json.JsonConvert.SerializeObject(new
+                                        {
+                                            type = "voice_input",
+                                            content = text
+                                        });
                                         pane.Dispatcher.Invoke(() =>
                                         {
-                                            pane.WebView?.CoreWebView2?.ExecuteScriptAsync($"injectVoiceText('{text}')");
+                                            pane.WebView?.CoreWebView2?.PostWebMessageAsJson(json);
                                         });
                                     }
                                 }

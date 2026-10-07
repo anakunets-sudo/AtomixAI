@@ -41,6 +41,16 @@ namespace AtomixAI.Main.UI
                 // КРИТИЧНО: Сначала привязываем окружение, и ТОЛЬКО ПОТОМ задаем Source
                 await WebView.EnsureCoreWebView2Async(env);
 
+                try
+                {
+                    await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                        $"window.__ATOMIX_I18N = {Localizer.ToJson()}; window.__ATOMIX_LANG = '{Localizer.Language}';");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[i18n] Inject failed, UI stays in English: {ex}");
+                }
+
                 // Связываем наш обработчик с WebView и диспетчером WPF-страницы
                 _uiHandler.InitializeBridge(WebView, this.Dispatcher);
 
@@ -51,9 +61,10 @@ namespace AtomixAI.Main.UI
                 ApplyTheme(uiapp);
                 
                 // Передаем текущую тему во фронтенд сразу после того, как он загрузится
-                WebView.NavigationCompleted += (sender, args) =>
+                WebView.NavigationCompleted += async (sender, args) =>
                 {
                     PushThemeToFrontend();
+                    await PushLocalizationToFrontendAsync();
                 };
 
                 // 5. Установка адреса
@@ -165,6 +176,35 @@ namespace AtomixAI.Main.UI
             });
             WebView.CoreWebView2.PostWebMessageAsJson(json);
         }
+
+        private async System.Threading.Tasks.Task PushLocalizationToFrontendAsync()
+        {
+            if (WebView?.CoreWebView2 == null) return;
+
+            string languageJson = Newtonsoft.Json.JsonConvert.SerializeObject(Localizer.Language);
+            string script =
+                "(function() {" +
+                $"window.__ATOMIX_I18N = {Localizer.ToJson()};" +
+                $"window.__ATOMIX_LANG = {languageJson};" +
+                "if (window.Atomix && window.Atomix.I18n) {" +
+                "window.Atomix.I18n.strings = window.__ATOMIX_I18N;" +
+                "window.Atomix.I18n.lang = window.__ATOMIX_LANG;" +
+                "document.documentElement.lang = window.__ATOMIX_LANG;" +
+                "window.Atomix.I18n.apply(document);" +
+                "}" +
+                "})();";
+
+            try
+            {
+                await WebView.CoreWebView2.ExecuteScriptAsync(script);
+                Debug.WriteLine($"[i18n] Applied '{Localizer.Language}' after navigation.");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[i18n] Apply after navigation failed: {ex}");
+            }
+        }
+
         public void SetupDockablePane(Autodesk.Revit.UI.DockablePaneProviderData data)
         {
             data.FrameworkElement = this;
@@ -233,10 +273,13 @@ namespace AtomixAI.Main.UI
                             {
                                 System.Diagnostics.Debug.WriteLine($"[UI Debug] Prompt sent to AI: {prompt}");
 
+                                int turn = payload["turn"]?.ToObject<int>() ?? 0;
+                                int generation = TransactionManager.BindRequest(turn);
                                 var pipePayload = Newtonsoft.Json.JsonConvert.SerializeObject(new
                                 {
                                     action = "chat_request",
-                                    prompt = prompt
+                                    prompt = prompt,
+                                    generation = generation
                                 });
                                 _mcpHost.BroadcastToClients(pipePayload);
                             }
@@ -248,20 +291,31 @@ namespace AtomixAI.Main.UI
                         string args = request["args"]?.ToString();
                         if (!string.IsNullOrEmpty(toolName))
                         {
+                            int generation = TransactionManager.ActiveRequestGeneration;
+                            if (TransactionManager.IsStaleOrCancelled(generation))
+                                break;
+
                             lock (_handler.CommandQueue)
                             {
-                                _handler.CommandQueue.Enqueue((toolName, args));
+                                _handler.CommandQueue.Enqueue(new PendingToolCall(toolName, args ?? "{}", generation));
                             }
                             _exEvent.Raise();
                         }
                         break;
                     case "stop":
+                        // CurrentHandler — [ThreadStatic] и живёт только внутри Execute() на потоке Revit.
+                        // Здесь помечаем поколение и чистим очередь; Rollback делает ExecuteSequence.
+                        TransactionManager.RequestCancel();
                         lock (_handler.CommandQueue)
                         {
                             _handler.CommandQueue.Clear();
                         }
-                        _mcpHost.BroadcastToClients(Newtonsoft.Json.JsonConvert.SerializeObject(new { action = "abort" }));
-                        AtomixAI.Core.TransactionManager.CurrentHandler?.Rollback();
+                        _mcpHost.BroadcastToClients(Newtonsoft.Json.JsonConvert.SerializeObject(new
+                        {
+                            action = "abort",
+                            generation = TransactionManager.ActiveRequestGeneration
+                        }));
+                        _exEvent.Raise();
                         break;
                     case "rate_training": // Твоя логика сохранения оценок
                         break;
