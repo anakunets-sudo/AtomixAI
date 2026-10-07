@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data:; connect-src 'self' *;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BIM Wave Terminal</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        (function () {
+            var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+</head>
+<body>
+
+    <div class="header">
+        <div style="display: flex; align-items: center;">
+            <div class="nav-tools">
+                <button class="nav-btn" data-tooltip="BIM Wave: Contextual intelligence. Revit execution."><span class="brand"></span><span class="version-tag">BIM Wave Free</span></button>
+                <button class="nav-btn" data-tooltip="Your pyRevit Scripts Library">Python scripts<span>&nbsp;<svg xmlns="http://www.w3.org/2000/svg" width="12" height="11" fill="currentColor" class="bi bi-lock-fill" viewBox="0 0 16 16" style="margin-bottom: -1px;">
+    <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4m0 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3" />
+</svg></span></button>
+                <button class="nav-btn" data-tooltip="Train & Tune AI Patterns">Pattern Lab</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat">
+        <div class="msg ai">Hey! I’m Livvy, your BimWave AI assistant. What are we working on today?</div>
+    </div>
+
+    <div id="ai-menu" class="menu-hidden">
+        <div id="menu-items"></div>
+    </div>
+
+    <div class="input-area">
+        <button id="micBtn" class="icon-btn" aria-label="Voice" onclick="toggleVoice()" data-tooltip="Voice input">
+            <span id="micIcon"></span>
+        </button>
+        <div class="ctr-userInput">
+            <!--<textarea rows="1" id="userInput" placeholder="Describe sequence... [Enter to send]"></textarea>-->
+            <div id="userInput"
+                 contenteditable="true"
+                 placeholder="Describe sequence... [Enter to send]"></div>
+
+            <button id="sendBtn" class="icon-btn send-btn" aria-label="Send" onclick="sendMessage()" data-tooltip="Send">
+                <span style="font-size: 16px; margin: 0 0 0 -3px; transform: scaleY(1.1);"></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div>
+            <button data-tooltip="Expand environment settings" style="background: none; border: none; padding: 0px 20px; margin-left:-20px; cursor: pointer; height: 27px; overflow: hidden;">
+                <p style="font-family: 'Segoe MDL2 Assets'; font-size: 16px; color: #888; padding: 0px; margin-top: 8px;"></p>
+            </button>
+        </div>
+        <div class="status-group">
+            <span class="status-dot online"></span>
+            <span style="padding: 0 0 2px; color: var(--nav-text);">
+                AI core: <span class="model-link status-text">Google Gemini</span>
+            </span>
+        </div>
+        <div class="theme-switch-wrapper">
+            <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+            <label class="switch">
+                <input type="checkbox" id="themeToggle" onclick="toggleTheme()">
+                <span class="slider"></span>
+            </label>
+            <span style="font-family: 'Segoe MDL2 Assets'; font-size: 12px;"></span>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация темы при загрузке страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            const initialTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            applyTheme(initialTheme);
+        });
+
+        function toggleTheme() {
+            const toggle = document.getElementById('themeToggle');
+            const nextTheme = toggle.checked ? 'dark' : 'light';
+            applyTheme(nextTheme);
+            // Используем единый метод из bridge.js вместо старого sendAction
+            window.Atomix.RevitBridge.send('theme_manual', { theme: nextTheme });
+        }
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const toggle = document.getElementById('themeToggle');
+            if (toggle) toggle.checked = (theme === 'dark');
+        }
+    </script>
+
+
+
+
+    <script src="js/main.js"></script>
+
+    <!-- 1. Сначала загружаем "библиотеки" и контроллеры -->
+    <script src="js/bridge.js"></script>
+    <script src="js/chips.js"></script>
+    <script src="js/menu.js"></script>
+    <script src="js/editor.js"></script>
+
+    <!-- 2. Последним загружаем главный файл, который их использует -->
+    <script src="js/app.js"></script>
+
+</body>
+</html>

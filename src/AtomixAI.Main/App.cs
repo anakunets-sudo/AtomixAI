@@ -1,17 +1,12 @@
-﻿using AtomixAI.Bridge;
-using AtomixAI.Core;
+using AtomixAI.Bridge;
 using AtomixAI.Main.Infrastructure;
 using AtomixAI.Main.UI;
 using Autodesk.Revit.UI;
-using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Reflection;
-using System.Reflection.Metadata;
-using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Windows.Threading;
 
 namespace AtomixAI.Main
 {
@@ -22,9 +17,13 @@ namespace AtomixAI.Main
         private Infrastructure.AtomicExternalEventHandler _handler;
         private AtomixDockablePane _pane;
         public static readonly DockablePaneId PaneId = AtomixDockablePane.ID;
-
         private System.Diagnostics.Process _pyProcess;
-        private System.Diagnostics.Process _vocalSyncProcess;                
+        private System.Diagnostics.Process _vocalSyncProcess;
+
+        // НАШИ НОВЫЕ ПОЛЯ ДЛЯ ИЗОЛИРОВАННОГО UI
+        private AtomixAI.UI.Infrastructure.UiExternalEventHandler _uiHandler;
+        private Autodesk.Revit.UI.ExternalEvent _uiExEvent;
+
         public Result OnStartup(UIControlledApplication application)
         {
             try
@@ -33,34 +32,34 @@ namespace AtomixAI.Main
                 {
                     StartEmbeddedOrchestrator();
                 }
-
                 // 1. Инициализируем ToolDispatcher (укажите ваш путь к папке со скриптами Python)
                 var _dispatcher = new ToolDispatcher(@"C:\AtomixAI\Scripts");
-
                 // 2. Создаем обработчик (пока без хоста, чтобы избежать ошибки конструктора)
                 _handler = new AtomicExternalEventHandler(_dispatcher);
                 _externalEvent = ExternalEvent.Create(_handler);
 
+                // Создаем изолированный обработчик для UI
+                _uiHandler = new AtomixAI.UI.Infrastructure.UiExternalEventHandler();
+                _uiExEvent = ExternalEvent.Create(_uiHandler);
+
                 // 3. Создаем MCP Host, передавая ему очередь из обработчика
                 _mcpHost = new McpHost(_handler.CommandQueue, _externalEvent, _dispatcher);
-
                 _dispatcher.RegisterHost(_mcpHost);
                 _handler.RegisterHost(_mcpHost);
-
                 // 4. Регистрируем панель, передавая в неё McpHost
-                _pane = new AtomixDockablePane(_handler, _externalEvent, _mcpHost); // ДОБАВЛЕНО: _mcpHost
+                _pane = new AtomixDockablePane(_handler, _externalEvent, _uiHandler, _uiExEvent,  _mcpHost); // ДОБАВЛЕНО: _mcpHost
                 application.RegisterDockablePane(PaneId, AtomixDockablePane.Name, _pane);
-
                 // Подписка на ответы от ИИ для проброса в UI
-                _mcpHost.OnMessageReceived += (jsonPayload) => {
+                _mcpHost.OnMessageReceived += (jsonPayload) =>
+                {
                     try
                     {
                         // 1. Пытаемся найти Dispatcher через родительское окно WebView или текущий поток
                         var dispatcher = _pane.WebView.Dispatcher;
-
                         if (dispatcher != null)
                         {
-                            dispatcher.Invoke(() => {
+                            dispatcher.Invoke(() =>
+                            {
                                 if (_pane.WebView.CoreWebView2 != null)
                                 {
                                     _pane.WebView.CoreWebView2.PostWebMessageAsJson(jsonPayload);
@@ -73,8 +72,8 @@ namespace AtomixAI.Main
                         System.Diagnostics.Debug.WriteLine($"[UI Push Error]: {ex.Message}");
                     }
                 };
-
-                Task.Run(async () => {
+                Task.Run(async () =>
+                {
                     try
                     {
                         await _mcpHost.ListenAsync();
@@ -85,39 +84,60 @@ namespace AtomixAI.Main
                     }
                 });
 
-                // Подписываемся на событие открытия документа, чтобы прогрузить WebView
-                application.Idling += (s, e) => {
+
+                // Один проход инициализации WebView + несколько idle, пока Revit дотягивает CurrentTheme
+                EventHandler<Autodesk.Revit.UI.Events.IdlingEventArgs> webViewBoot = null;
+                var initStarted = false;
+                var themeSettleCount = 0;
+                webViewBoot = (s, e) =>
+                {
+                    var uiapp = s as UIApplication;
+                    if (!initStarted)
+                    {
+                        initStarted = true;
+                        _pane.ApplyTheme(uiapp);
+                        _ = BootWebViewAsync(uiapp);
+                        return;
+                    }
+
                     if (_pane.WebView.CoreWebView2 == null)
-                    {
-                        _pane.InitializeAsync().ContinueWith(t => {
-                            // При первой загрузке берем системную тему
-                            _pane.Dispatcher.Invoke(() => _pane.ApplyTheme(s as UIApplication));
-                        }, TaskScheduler.FromCurrentSynchronizationContext());
-                    }
-                };
+                        return;
 
-#if REVIT2025_OR_GREATER
-
-                application.ThemeChanged += (s, e) => {
-                    if (s is UIApplication uiapp)
-                    {
-                        _pane?.ApplyTheme(uiapp);
-                    }
+                    _pane.ApplyTheme(uiapp);
+                    if (++themeSettleCount >= 12)
+                        application.Idling -= webViewBoot;
                 };
+                application.Idling += webViewBoot;
+#if REVIT2024_OR_GREATER
+            application.ThemeChanged += (s, e) =>
+            {
+                if (s is UIApplication uiapp)
+                {
+                    _pane?.ApplyTheme(uiapp);
+                }
+            };
 #endif
-
                 CreateRibbon(application);
-
                 StartVocalSyncServer(_pane);
-
                 StartVocalSyncProcess();
-
                 return Result.Succeeded;
             }
             catch (Exception ex)
-            {
-                //MessageBox.Show("AtomixAI Load Error", ex.Message);
+            { //MessageBox.Show("AtomixAI Load Error", ex.Message);
                 return Result.Failed;
+            }
+        }
+
+        private async System.Threading.Tasks.Task BootWebViewAsync(UIApplication uiapp)
+        {
+            try
+            {
+                await _pane.InitializeAsync(uiapp);
+                await _pane.Dispatcher.InvokeAsync(() => _pane.ApplyTheme(uiapp));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[WebView Boot] {ex.Message}");
             }
         }
         public Result OnShutdown(UIControlledApplication application)
@@ -128,54 +148,47 @@ namespace AtomixAI.Main
                 if (_pyProcess != null && !_pyProcess.HasExited) _pyProcess.Kill();
                 if (_vocalSyncProcess != null && !_vocalSyncProcess.HasExited) _vocalSyncProcess.Kill();
             }
-            catch { /* Handle exit race conditions */ }
-
+            catch
+            { /* Handle exit race conditions */
+            }
             return Result.Succeeded;
         }
-
         private void CreateRibbon(UIControlledApplication a)
         {
             string tabName = "AtomicBIM";
-            try { a.CreateRibbonTab(tabName); } catch { } // Создаем вкладку, если её нет
-
+            try
+            {
+                a.CreateRibbonTab(tabName);
+            }
+            catch
+            {
+            } // Создаем вкладку, если её нет
             RibbonPanel panel = a.CreateRibbonPanel(tabName, "Tools");
-
             // Путь к текущей DLL
             string assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-
             // Создаем кнопку, которая вызывает наш класс ShowAiPane (из Command.cs)
             PushButtonData btnData = new PushButtonData(
-                "Show Pane",
-                "Open AI\nChat",
-                assemblyPath,
-                "AtomixAI.Main.ShowPane" // Полное имя класса с пространством имен!
+            "Show Pane", "Open AI\nChat", assemblyPath,
+            "AtomixAI.Main.ShowPane" // Полное имя класса с пространством имен!
             );
-
             PushButton btn = panel.AddItem(btnData) as PushButton;
-            btn.ToolTip = "Open the AI ​​control panel";
-
-            // Можно добавить иконку (32x32)
-            // btn.LargeImage = new BitmapImage(new Uri("pack://application:,,,/YourAssembly;component/Resources/ai_icon.png"));
+            btn.ToolTip = "Open the AI control panel"; // Можно добавить иконку (32x32)
+                                                       // btn.LargeImage = new BitmapImage(new Uri("pack://application:,,,/YourAssembly;component/Resources/ai_icon.png"));
         }
-
         private void StartEmbeddedOrchestrator()
         {
             try
             {
                 string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-
                 // 1. Путь к нашему встроенному исполняемому файлу
                 string pythonExe = Path.Combine(assemblyDir, "PythonRuntime", "python.exe");
-
                 // 2. Путь к скрипту
                 string scriptPath = Path.Combine(assemblyDir, "Orchestrator", "orchestrator.py");
-
                 if (!File.Exists(pythonExe))
                 {
                     System.Diagnostics.Debug.WriteLine("[AtomixAI] PythonRuntime not found!");
                     return;
                 }
-
                 var startInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = pythonExe,
@@ -186,14 +199,13 @@ namespace AtomixAI.Main
                     RedirectStandardError = true,
                     WorkingDirectory = Path.Combine(assemblyDir, "Orchestrator")
                 };
-
                 // Передаем переменные окружения, чтобы Python не искал библиотеки в системе
                 startInfo.EnvironmentVariables["PYTHONPATH"] = Path.Combine(assemblyDir, "PythonRuntime");
-
+                // ЖЕСТКИЙ ХАК ДЛЯ PYTHON 3.7+: Включаем глобальный режим UTF-8 на уровне процесса Windows
+                startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
                 _pyProcess = new System.Diagnostics.Process { StartInfo = startInfo };
                 _pyProcess.Start();
                 ProcessJobTracker.AddProcess(_pyProcess);
-
                 // Читаем логи Python в окно Output Visual Studio для отладки
                 _pyProcess.BeginOutputReadLine();
                 _pyProcess.BeginErrorReadLine();
@@ -210,9 +222,7 @@ namespace AtomixAI.Main
                 string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                 string pythonExe = Path.Combine(assemblyDir, "PythonRuntime", "python.exe");
                 string vocalSyncScript = Path.Combine(assemblyDir, "Orchestrator", "AtomixVocalSync.py");
-
                 if (!File.Exists(vocalSyncScript)) return;
-
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = pythonExe,
@@ -221,11 +231,9 @@ namespace AtomixAI.Main
                     CreateNoWindow = true, // Скрываем окно, чтобы не мешало в Revit
                     WorkingDirectory = Path.Combine(assemblyDir, "Orchestrator")
                 };
-
                 _vocalSyncProcess = new Process { StartInfo = startInfo };
                 _vocalSyncProcess.Start();
                 ProcessJobTracker.AddProcess(_vocalSyncProcess);
-
                 Debug.WriteLine("[AtomixAI] VocalSync Engine Started.");
             }
             catch (Exception ex)
@@ -235,7 +243,8 @@ namespace AtomixAI.Main
         }
         private void StartVocalSyncServer(AtomixDockablePane pane)
         {
-            Task.Run(async () => {
+            Task.Run(async () =>
+            {
                 while (true) // Цикл для переподключения после закрытия Pipe клиентом
                 {
                     try
@@ -249,9 +258,9 @@ namespace AtomixAI.Main
                                 {
                                     var text = await reader.ReadLineAsync();
                                     if (!string.IsNullOrEmpty(text))
-                                    {
-                                        // Вбрасываем текст прямо в JS через Dispatcher
-                                        pane.Dispatcher.Invoke(() => {
+                                    { // Вбрасываем текст прямо в JS через Dispatcher
+                                        pane.Dispatcher.Invoke(() =>
+                                        {
                                             pane.WebView?.CoreWebView2?.ExecuteScriptAsync($"injectVoiceText('{text}')");
                                         });
                                     }
@@ -259,7 +268,9 @@ namespace AtomixAI.Main
                             }
                         }
                     }
-                    catch { /* Ошибка подключения, пробуем снова */ }
+                    catch
+                    { /* Ошибка подключения, пробуем снова */
+                    }
                 }
             });
         }
