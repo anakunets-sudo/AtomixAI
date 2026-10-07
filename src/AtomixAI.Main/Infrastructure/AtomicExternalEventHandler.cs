@@ -9,11 +9,11 @@ using AtomixAI.Core;
 using System.Diagnostics;
 
 namespace AtomixAI.Main.Infrastructure
-{
+{    
     public class AtomicExternalEventHandler : IExternalEventHandler
     {
-        // Очередь команд: ID инструмента (или маркер __BATCH__) и его JSON-аргументы 
-        public readonly Queue<(string ToolId, string JsonArgs)> CommandQueue = new Queue<(string, string)>();
+        // Очередь команд: инструмент, JSON-аргументы и поколение запроса чата.
+        public readonly Queue<PendingToolCall> CommandQueue = new Queue<PendingToolCall>();
 
         private readonly ToolDispatcher _dispatcher;
         private McpHost _mcpHost;
@@ -30,17 +30,37 @@ namespace AtomixAI.Main.Infrastructure
         {
             TransactionManager.TransactionFactory = (name) => new RevitTransactionHandler(app.ActiveUIDocument, name);
 
-            while (CommandQueue.Count > 0)
+            while (true)
             {
-                var task = CommandQueue.Dequeue();
+                PendingToolCall task;
+                lock (CommandQueue)
+                {
+                    if (CommandQueue.Count == 0)
+                        break;
+                    task = CommandQueue.Dequeue();
+                }
 
-                AtomicResult finalResult = _dispatcher.DispatchSequence(task.JsonArgs);
+                // __BATCH__: JsonArgs — массив шагов {name, arguments}.
+                // Одиночный call: ToolId — имя инструмента, JsonArgs — объект аргументов.
+                AtomicResult finalResult;
+                if (string.Equals(task.ToolId, "__BATCH__", StringComparison.Ordinal))
+                {
+                    finalResult = _dispatcher.DispatchSequence(task.JsonArgs, task.Generation);
+                }
+                else
+                {
+                    string jsonArgs = string.IsNullOrWhiteSpace(task.JsonArgs) ? "{}" : task.JsonArgs;
+                    finalResult = TransactionManager.ExecuteSequence(
+                        task.ToolId,
+                        () => _dispatcher.Dispatch(task.ToolId, jsonArgs),
+                        task.Generation);
+                }
 
                 Debug.WriteLine($"[AtomicExternalEventHandler] finalResult: {finalResult.ToString()}");
 
                 Debug.WriteLine($"[AtomicExternalEventHandler] _mcpHost: {_mcpHost.ToString()}");
 
-                _mcpHost?.SendToolResult(finalResult, task.ToolId);
+                _mcpHost?.SendToolResult(finalResult, task.ToolId, task.Generation);
 
                 Debug.WriteLine($"[AtomicExternalEventHandler] ended ");
             }

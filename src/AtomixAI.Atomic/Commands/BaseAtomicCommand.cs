@@ -13,14 +13,12 @@ namespace AtomixAI.Atomic.Commands
 {
     public abstract class BaseAtomicCommand : IAtomicCommand
     {
-        [AtomicParam("Unique command name.")]
-        public string CommandId => this.GetType().GetCustomAttribute<AtomicInfoAttribute>()?.Name;
+        [AiParam("INPUT_PORT: Accepts a data tag. If the user points to a specific tag (e.g. #wall_1), USE IT EXACTLY.")] // Defaults to '#_last'.
+        public string In { get; set; } = string.Empty; // "#_last" 
 
-        [AtomicParam("INPUT_PORT: Accepts a data tag. If the user points to a specific tag (e.g. #wall_1), USE IT EXACTLY. Defaults to '#_last'.")]
-        public string In { get; set; } = "#_last";
-
-        [AtomicParam("OUTPUT_PORT: Creates a NEW unique data tag.")]
+        [AiParam("OUTPUT_PORT: Creates a NEW unique data tag.")]
         public string Out { get; set; }
+        public virtual DynamicBimContract Params { get; set; }
 
         // --- ВХОД (ДАННЫЕ ИЗ ХРАНИЛИЩА) ---
         protected AtomicResult GetInput<T>(out T value, string? input = null)
@@ -31,8 +29,8 @@ namespace AtomixAI.Atomic.Commands
 
             if (input == null)
             {
-                activeIn = string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase)
-                    ? "#_last" : In;
+                //activeIn = string.IsNullOrWhiteSpace(In) || In.Equals("none", StringComparison.OrdinalIgnoreCase) ? "#_last" : In;
+                activeIn = In;
             }
 
             var rawData = AtomicStorage.Get(activeIn);
@@ -61,7 +59,7 @@ namespace AtomixAI.Atomic.Commands
                     newList.Add(rawData);
                     value = (T)newList;
 
-                    Debug.WriteLine($"[BASE-CMD] 🎁 Auto-wrapped {rawData.GetType().Name} into {typeof(T).Name} for tag '{activeIn}'");
+                    Debug.WriteLine($"[BASE-CMD] Auto-wrapped {rawData.GetType().Name} into {typeof(T).Name} for tag '{activeIn}'");
                     return AtomicResult.Ok();
                 }
             }
@@ -120,7 +118,7 @@ namespace AtomixAI.Atomic.Commands
             string activeTag = !string.IsNullOrWhiteSpace(Out) && !Out.Equals("none") ? Out : In;
             if (!string.IsNullOrEmpty(message) && !message.Contains(activeTag))
             {
-                message = $"[{activeTag}]: {message}";
+                message = $"tag: \"{activeTag}\", message: \"{message}\"";
             }
 
             if (!string.IsNullOrEmpty(message) && !success)
@@ -133,7 +131,7 @@ namespace AtomixAI.Atomic.Commands
             {
                 Success = success,
                 Data = finalDataForAi,
-                Message = message ?? (success ? "Success" : "Operation failed")
+                Message = message ?? (success ? "Success" : "Operation failed"),                
             };
         }
 

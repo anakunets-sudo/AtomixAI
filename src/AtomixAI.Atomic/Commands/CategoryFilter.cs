@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+/*
 namespace AtomixAI.Atomic.Commands
 {
     /// <summary>
@@ -15,11 +15,11 @@ namespace AtomixAI.Atomic.Commands
     /// Usually applied after ClassFilter to narrow down the element collection.
     /// </summary>
 
-    [AtomicInfo(
+    [AiInfo(
     name: "category",
     group: AtomicGroupType.Search,
     description: "Search elemetns by Category",
-    keywords: new[] { "category", "filter" })]
+    keywords: "category, filter")]
     public class CategoryFilter : ISearchFilter
     {
         /// <summary>
@@ -27,7 +27,7 @@ namespace AtomixAI.Atomic.Commands
         /// </summary>
         public int Priority => 2;
 
-        [AtomicParam("Revit BuiltInCategory name (e.g. OST_Walls)", isRequired: true)]
+        [AiParam("Revit BuiltInCategory name (e.g. OST_Walls)", isRequired: true)]
         public string CategoryName { get; set; }
 
         /// <summary>
@@ -80,3 +80,4 @@ namespace AtomixAI.Atomic.Commands
         }
     }
 }
+*/

@@ -14,60 +14,53 @@ using System.Threading.Tasks;
 namespace AtomixAI.Atomic.Commands
 {
 
-    [AtomicInfo(
+    [AiInfo(
     name: "select_except",
     group: AtomicGroupType.Search,
-    description: "PHYSICAL ACTION: Highlights elements in the Revit UI excluding elements by the Exclude tag. Not used as a first command. IMPORTANT: This tool does NOT search. It ONLY takes an existing tag from the previous command and makes it visible/selected for the user.",
+    description: "Highlights existing elements in model, excluding the specified. Requires input from prior command. Cannot start a chain.",
     keywords: new[] { "select", "exclude" })]
     public class SelectExceptCmd : BaseAtomicCommand,  IAtomicCommand
     {
-        [AtomicParam("OUTPUT_PORT: Creates a new data tag containing ElementId to exclude. This tag is used to select the ElementId to exclude from the selection.")]
-        public string Exclude { get; set; }
+        public class SelectExceptSchema : DynamicBimContract
+        {
+            [AiParam("A data tag '#<tag_name>' containing ElementId to exclude. This tag is used to select the ElementId to exclude from the selection.")]
+            public string ExceptTag { get; set; }
+        }
+
+        [AiParam(schema: typeof(SelectExceptSchema), type: "json")]
+        public override DynamicBimContract Params { get; set; }
 
         protected override AtomicResult Execute(ITransactionHandler handler)
         {
             List<ElementId> toSelected;
 
-            var result = GetInput(out List<ElementId> inputDatas);
-
-            if (!result.Success) 
+            if(!GetInput(out DynamicBimContract inputDatas).Success || !inputDatas.Get(BimKeys.Elements.ElementIds, out List<ElementId> elementIds))
             {
-                result = GetInput(out ElementId inputData);
-                if (!result.Success)
-                {
-                    return result;
-                }
-                else
-                {
-                    toSelected = new List<ElementId> { inputData };
-                }
-            }
-            else
-            {
-                toSelected = inputDatas;
+                return AtomicResult.Error("No input data found. Please provide a list of ElementIds to select.");
             }
 
-            if (toSelected != null)
+            var myParam = Params as SelectExceptSchema;
+
+            if(myParam.ExceptTag == null)
             {
-                result = GetInput(out List<ElementId> exclude, Exclude);
-
-                if (!result.Success)
-                {
-                    return result;
-                }
-                else
-                {
-                    toSelected = toSelected.Except(exclude).ToList();
-                }
-
-                handler.UIDoc.Selection.SetElementIds(toSelected);
-
-                return SetOutput(toSelected, toSelected.Count, true, $"Selected {toSelected.Count} elements. Stored in '{Out}'.");
+                return AtomicResult.Error("No Except parameter found. Please provide a tag name to exclude.");
             }
-            else
+
+            if(!GetInput(out DynamicBimContract excludeDatas, myParam.ExceptTag).Success || !excludeDatas.Get(BimKeys.Elements.ElementIds, out List<ElementId> exclude))
             {
-                return SetOutput(null, 0, false);
+                return AtomicResult.Error($"No data found for Except tag '{myParam.ExceptTag}'. Please provide a list of ElementIds to exclude.");
             }
+
+            toSelected = elementIds.Except(exclude).ToList();
+
+            if (toSelected.Count == 0)
+            {
+                return AtomicResult.Error("No elements to select after excluding. Please check your input data and exclude tag.");
+            }
+
+            handler.UIDoc.Selection.SetElementIds(toSelected);
+
+            return SetOutput(toSelected, toSelected.Count, true, $"Selected {toSelected.Count} elements. Stored in '{Out}'.");
         }
     }
 }

@@ -18,7 +18,7 @@ namespace AtomixAI.Bridge
 {
     public class McpHost
     {
-        private readonly Queue<(string ToolId, string JsonArgs)> _commandQueue;
+        private readonly Queue<PendingToolCall> _commandQueue;
         private readonly ExternalEvent _externalEvent;
         private bool _isRunning = false;
         public event Action<string> OnMessageReceived;
@@ -28,7 +28,7 @@ namespace AtomixAI.Bridge
         // Очередь сообщений, которые нужно отправить ИЗ интерфейса В Python
         private readonly ConcurrentQueue<string> _uiToPythonQueue = new ConcurrentQueue<string>();
 
-        public McpHost(Queue<(string, string)> queue, ExternalEvent exEvent, ToolDispatcher dispatcher)
+        public McpHost(Queue<PendingToolCall> queue, ExternalEvent exEvent, ToolDispatcher dispatcher)
         {
             _commandQueue = queue;
             _externalEvent = exEvent;
@@ -54,9 +54,23 @@ namespace AtomixAI.Bridge
                 try
                 {
                     PipeSecurity pipeSa = new PipeSecurity();
+                    // Только текущий пользователь. WorldSid позволял любому локальному
+                    // процессу подключиться и отправить call_batch.
+                    SecurityIdentifier currentUser = WindowsIdentity.GetCurrent().User
+                        ?? throw new InvalidOperationException("Current user SID is unavailable.");
+                    // Клиент открывает pipe с GENERIC_READ | GENERIC_WRITE: кроме Read/Write
+                    // нужны SYNCHRONIZE, атрибуты, READ_CONTROL и бит FILE_APPEND_DATA
+                    // (на pipe это CreateNewInstance).
                     pipeSa.AddAccessRule(new PipeAccessRule(
-                        new SecurityIdentifier(WellKnownSidType.WorldSid, null),
-                        PipeAccessRights.ReadWrite,
+                        currentUser,
+                        PipeAccessRights.ReadWrite
+                            | PipeAccessRights.CreateNewInstance
+                            | PipeAccessRights.Synchronize
+                            | PipeAccessRights.ReadAttributes
+                            | PipeAccessRights.WriteAttributes
+                            | PipeAccessRights.ReadExtendedAttributes
+                            | PipeAccessRights.WriteExtendedAttributes
+                            | PipeAccessRights.ReadPermissions,
                         AccessControlType.Allow));
 
 #if NETFRAMEWORK
@@ -149,7 +163,7 @@ namespace AtomixAI.Bridge
         }
 
         // Внутри McpHost.cs добавим метод для отправки результата выполнения команды
-        public void SendToolResult(AtomicResult result, string toolId)
+        public void SendToolResult(AtomicResult result, string toolId, int generation = 0)
         {
             Debug.WriteLine($"[McpHost] SendToolResult start");
 
@@ -157,7 +171,9 @@ namespace AtomixAI.Bridge
             {
                 action = "tool_execution_result",
                 tool = toolId,
+                generation = generation,
                 success = result.Success,
+                cancelled = result.Cancelled,
                 message = result.Message,
                 data = result.Data // Например, количество найденных элементов
             };
@@ -174,6 +190,9 @@ namespace AtomixAI.Bridge
             {
                 var request = JObject.Parse(json);
                 string action = request["action"]?.ToString();
+
+                if (action == "get_language")
+                    return JsonConvert.SerializeObject(new { language = Thread.CurrentThread.CurrentUICulture.Parent.EnglishName }); 
 
                 // ИСПРАВЛЕНО: Теперь всегда возвращаем JSON объект для Python
                 if (action == "get_manual")
@@ -194,25 +213,32 @@ namespace AtomixAI.Bridge
                 {
                     return Registry.GetToolsJson();
                 }
-                else if (action == "call")
+                if (action == "call")
                 {
                     string toolName = request["name"]?.ToString();
-                    string args = request["arguments"]?.ToString();
+                    if (string.IsNullOrEmpty(toolName))
+                        return JsonConvert.SerializeObject(new { error = "Tool name is required" });
 
-                    if (!string.IsNullOrEmpty(toolName))
+                    int generation = ReadGeneration(request);
+                    if (TransactionManager.IsStaleOrCancelled(generation))
+                        return JsonConvert.SerializeObject(new { status = "aborted" });
+
+                    string args = request["arguments"]?.ToString();
+                    lock (_commandQueue)
                     {
-                        lock (_commandQueue)
-                        {
-                            _commandQueue.Enqueue((toolName, args));
-                        }
-                        _externalEvent.Raise();
-                        return JsonConvert.SerializeObject(new { status = "queued", tool = toolName });
+                        _commandQueue.Enqueue(new PendingToolCall(toolName, string.IsNullOrWhiteSpace(args) ? "{}" : args, generation));
                     }
+                    _externalEvent.Raise();
+                    return JsonConvert.SerializeObject(new { status = "queued", tool = toolName });
                 }
 
-                // НОВЫЙ КЕЙС: Выполнение цепочки команд (Sequence)
+                // Выполнение цепочки команд (Sequence)
                 if (action == "call_batch")
                 {
+                    int generation = ReadGeneration(request);
+                    if (TransactionManager.IsStaleOrCancelled(generation))
+                        return JsonConvert.SerializeObject(new { status = "aborted" });
+
                     var sequence = request["sequence"]; // Ожидаем массив объектов {name, arguments}
                     if (sequence != null && sequence.HasValues)
                     {
@@ -220,29 +246,14 @@ namespace AtomixAI.Bridge
 
                         lock (_commandQueue)
                         {
-                            // Используем префикс-маркер или специальный ID, 
-                            // чтобы ToolDispatcher понял: это не одна команда, а пакет.
-                            _commandQueue.Enqueue(("__BATCH__", sequenceJson));
+                            // Маркер __BATCH__: обработчик разберёт JsonArgs как массив шагов.
+                            _commandQueue.Enqueue(new PendingToolCall("__BATCH__", sequenceJson, generation));
                         }
 
                         _externalEvent.Raise();
                         return JsonConvert.SerializeObject(new { status = "batch_queued", count = sequence.Count() });
                     }
                     return JsonConvert.SerializeObject(new { error = "Empty or invalid sequence" });
-                }
-
-                // Одиночный вызов (обратная совместимость)
-                else if (action == "call")
-                {
-                    string toolName = request["name"]?.ToString();
-                    string args = request["arguments"]?.ToString();
-
-                    if (!string.IsNullOrEmpty(toolName))
-                    {
-                        lock (_commandQueue) { _commandQueue.Enqueue((toolName, args)); }
-                        _externalEvent.Raise();
-                        return JsonConvert.SerializeObject(new { status = "queued", tool = toolName });
-                    }
                 }
 
                 return JsonConvert.SerializeObject(new { status = "ok" });
@@ -253,5 +264,13 @@ namespace AtomixAI.Bridge
             }
         }
         public void Stop() => _isRunning = false;
+
+        private static int ReadGeneration(JObject request)
+        {
+            int generation = request["generation"]?.ToObject<int>() ?? 0;
+            if (generation <= 0)
+                generation = TransactionManager.ActiveRequestGeneration;
+            return generation;
+        }
     }
 }

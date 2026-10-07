@@ -13,12 +13,19 @@ using System.Text;
 
 namespace AtomixAI.Bridge
 {
+    /// <summary>
+    /// Выполняет роль оркестратора и маршрутизатора запросов к различным подсистемам, 
+    /// сервисам или агентам.Автоматизирует процесс выбора, валидации и безопасного
+    /// вызова нужного инструмента в зависимости от контекста задачи.
+    /// </summary>
     public class ToolDispatcher
     {
         private readonly Dictionary<string, Type> _csCommands;
         private readonly PyRevitLoader _pyLoader;
         private McpHost _mcpHost;
+
         public void RegisterHost(McpHost host) => _mcpHost = host;
+
         public ToolDispatcher(string scriptsPath)
         {
             _pyLoader = new PyRevitLoader(scriptsPath);
@@ -28,7 +35,7 @@ namespace AtomixAI.Bridge
                 .GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
                 .ToDictionary(
-                    t => t.GetCustomAttribute<AtomicInfoAttribute>()?.Name ?? t.Name,
+                    t => t.GetCustomAttribute<AiInfoAttribute>()?.Name ?? t.Name,
                     t => t,
                     StringComparer.OrdinalIgnoreCase
                 );
@@ -36,17 +43,22 @@ namespace AtomixAI.Bridge
             Debug.WriteLine($"[DISPATCHER] Initialized. Commands found: {_csCommands.Count}");
         }
 
-        public AtomicResult DispatchSequence(string jsonSequence)
+        /// <summary>
+        /// Выполняет всю присланную от ИИ последовательность шагов в единой транзакции
+        /// </summary>
+        public AtomicResult DispatchSequence(string jsonSequence, int generation = 0)
         {
             Debug.WriteLine("[DISPATCHER] >>> Processing Sequence Batch (Single Result Mode)");
 
             var reportBuilder = new StringBuilder();
+            var promptAccumulated = string.Empty;
+            var isPromptOverride = false;
             var metadataCollector = new Dictionary<string, object>();
             int successCount = 0;
 
             try
             {
-                // 1. Парсим шаги
+                // 1. Парсим шаги конвейера
                 var steps = JsonConvert.DeserializeObject<List<SequenceStep>>(jsonSequence);
                 if (steps == null || steps.Count == 0)
                     return AtomicResult.Error("Empty sequence received.");
@@ -54,32 +66,49 @@ namespace AtomixAI.Bridge
                 // 2. Выполняем через TransactionManager (он сделает один Rollback при Success = false)
                 return TransactionManager.ExecuteSequence("AtomixAI Plan", () =>
                 {
+                    int count = 0;
+
                     foreach (var step in steps)
                     {
-                        // Выполняем команду (она сама пишет в AtomicStorage под меткой Out)
+                        if (TransactionManager.IsCurrentSequenceCancelled)
+                            return AtomicResult.Cancel();
+
+                        // Вызываем одиночный диспетчер для конкретного шага
                         var stepResult = Dispatch(step.Tool, JsonConvert.SerializeObject(step.Arguments));
 
-                        // Накапливаем текстовый отчет для Message (для человека и ИИ)
-                        reportBuilder.AppendLine($"- {step.Tool}: {(stepResult.Success ? "OK" : "FAILED")}. {stepResult.Message}");
+                        if (stepResult.PromptBehavior == PromptBehavior.Override)
+                        {
+                            promptAccumulated = $"\n{stepResult.Prompt}\n";
+                            isPromptOverride = true;
+                        }
+                        else if (stepResult.PromptBehavior == PromptBehavior.Append)
+                        {
+                            promptAccumulated += $"\n{stepResult.Prompt}\n";
+                        }
+
+                        // Накапливаем текстовый отчет для Message
+                        reportBuilder.AppendLine($"- step: \"{++count}\", bim tool: \"{step.Tool}\",  status: {(stepResult.Success ? "OK" : "FAILED")}, {stepResult.Message}");
 
                         if (!stepResult.Success)
                         {
-                            // ПРЕРЫВАЕМ при первой ошибке
-                            return new AtomicResult
+                            // ПРЕРЫВАЕМ цепочку при первой же ошибке выполнения
+                            var errorResult = new AtomicResult
                             {
                                 Success = false,
                                 Message = $"Sequence halted at step '{step.Tool}': {stepResult.Message}\nFull Log:\n{reportBuilder}"
                             };
+
+                            errorResult.PromptOverride(AtomicResult.DefaultPrompt + AtomicResult.ErrorPrompt);
+                            return errorResult;
                         }
 
-                        // Собираем "Квитанцию" для Data (Deep Metadata)
-                        // Если у команды был параметр Out (метка), добавим инфо о ней
+                        // Собираем "Квитанцию" для Data (Deep Metadata) по Out-тегам
                         if (step.Arguments.TryGetValue("Out", out var tagObj) && tagObj != null)
                         {
                             string tag = tagObj.ToString();
                             metadataCollector[tag] = new
                             {
-                                count = stepResult.Data, // Предполагаем, что команда вернула Count в Data
+                                count = stepResult.Data, // Передаем Count или ID
                                 tool = step.Tool
                             };
                         }
@@ -88,11 +117,10 @@ namespace AtomixAI.Bridge
                     }
 
                     // 3. ФИНАЛЬНЫЙ СБОР: Если всё успешно, создаем итоговый результат
-                    return new AtomicResult
+                    var finalResult = new AtomicResult
                     {
                         Success = true,
-                        Message = $"Successfully executed {successCount} steps.\n{reportBuilder}",
-                        // Анонимный класс (квитанция меток) для логики ИИ
+                        Message = $"Success.\n{reportBuilder}", //$"Successfully executed {successCount} steps.\n{reportBuilder}",
                         Data = new
                         {
                             total_success = successCount,
@@ -100,15 +128,27 @@ namespace AtomixAI.Bridge
                             status = "Completed"
                         }
                     };
-                });
+
+                    if (isPromptOverride)
+                    {
+                        finalResult.PromptOverride(promptAccumulated);
+                    }
+                    else
+                    {
+                        finalResult.PromptOverride(AtomicResult.DefaultPrompt + AtomicResult.SuccessPrompt + promptAccumulated);
+                    }
+
+                    return finalResult;
+                }, generation);
             }
             catch (Exception ex)
             {
-                return AtomicResult.Error($"Sequence Critical Error: {ex.Message}");
+                var finalResult = AtomicResult.Error($"Sequence Critical Error: {ex.Message}");
+                finalResult.PromptOverride(AtomicResult.DefaultPrompt + AtomicResult.ErrorPrompt);
+                return finalResult;
             }
         }
 
-        // Вспомогательный класс для десериализации (можно положить в конец файла)
         public class SequenceStep
         {
             [JsonProperty("name")]
@@ -117,87 +157,157 @@ namespace AtomixAI.Bridge
             [JsonProperty("arguments")]
             public Dictionary<string, object> Arguments { get; set; }
         }
-        
+        /// <summary>
+        /// Выполняет одиночную команду по её ID и наполняет свойства
+        /// </summary>
         public AtomicResult Dispatch(string toolId, string jsonArguments)
         {
             Debug.WriteLine($"\n[DISPATCHER] >>> Processing: {toolId}");
 
+            // 1. Поиск типа команды в реестре
+            if (!_csCommands.TryGetValue(toolId, out var commandType) || commandType == null)
+            {
+                string errorMsg = $"Command '{toolId}' not found in registered commands.";
+                Debug.WriteLine($"[DISPATCHER] !!! {errorMsg}");
+                return new AtomicResult { Success = false, Message = errorMsg };
+            }
+
+            // 2. Десериализация параметров
+            var parameters = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonArguments)
+                             ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+            // 3. Создание инстанса C#-команды
+            var instance = (IAtomicCommand)Activator.CreateInstance(commandType);
+
+            // МАППИНГ ПОРТОВ: Чистый, изолированный проброс In -> Out -> Params
+            MapProperties(instance, parameters, toolId);
+
+            // 4. Выполнение логики команды (Транзакция контролируется снаружи в TransactionHandler)
             try
             {
-                // 1. Поиск типа команды в реестре
-                // ИСПРАВЛЕНО: Добавлена проверка на наличие команды ПЕРЕД созданием инстанса
-                if (!_csCommands.TryGetValue(toolId, out var commandType) || commandType == null)
-                {
-                    string errorMsg = $"Command '{toolId}' not found in registered commands.";
-                    Debug.WriteLine($"[DISPATCHER] !!! {errorMsg}");
-                    return new AtomicResult { Success = false, Message = errorMsg };
-                }
-
-                // 2. Десериализация параметров
-                var parameters = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonArguments)
-                                 ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-
-                // Логика 'In' по умолчанию
-                if (!parameters.ContainsKey("In") || string.IsNullOrEmpty(parameters["In"]?.ToString()))
-                {
-                    parameters["In"] = "#_last";
-                    Debug.WriteLine("[DISPATCHER] ℹ 'In' was empty, auto-assigned to '#_last'");
-                }
-
-                // 3. Создание инстанса команды (теперь безопасно)
-                var instance = (IAtomicCommand)Activator.CreateInstance(commandType);
-
-                // Маппинг свойств из JSON в объект команды
-                MapProperties(instance, parameters);
-
-                return instance.Execute(parameters);
+                return instance.Execute(parameters); // Передаем параметры для совместимости, если нужно
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[DISPATCHER] !!! Critical Error in '{toolId}': {ex.Message}");
-                return new AtomicResult { Success = false, Message = $"Dispatch Error: {ex.Message}" };
+                Debug.WriteLine($"[DISPATCHER] !!! Critical Error executing '{toolId}': {ex.Message}");
+                throw; // Пробрасываем наверх для совершения Rollback
             }
         }
 
-        private void MapProperties(IAtomicCommand instance, Dictionary<string, object> parameters)
+
+        /// <summary>
+        /// Последовательно инжектирует данные в порты команды строго по алфавиту
+        /// </summary>
+        private void MapProperties(IAtomicCommand instance, Dictionary<string, object> parameters, string toolId)
         {
-            var props = instance.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            var type = instance.GetType();
 
-            foreach (var prop in props)
+            // === ПОРТ 1. IN ===
+            var inProp = type.GetProperty("In", BindingFlags.Public | BindingFlags.Instance);
+            if (inProp != null && inProp.CanWrite)
             {
-                // Пропускаем свойства без сеттера или отсутствующие в запросе
-                if (!prop.CanWrite || prop.GetSetMethod() == null) continue;
-                if (!parameters.TryGetValue(prop.Name, out var rawValue) || rawValue == null) continue;
+                if (parameters.TryGetValue("In", out var inTagObj) && inTagObj != null)
+                {
+                    inProp.SetValue(instance, inTagObj.ToString().Trim());
+                    Debug.WriteLine($"[MAPPER] Port 'In' mapped: '{inTagObj}'");
+                }
+                else
+                {
+                    inProp.SetValue(instance, null);
+                }
+            }
 
+            // === ПОРТ 2. OUT ===
+            var outProp = type.GetProperty("Out", BindingFlags.Public | BindingFlags.Instance);
+            if (outProp != null && outProp.CanWrite)
+            {
+                if (parameters.TryGetValue("Out", out var outTagObj) && outTagObj != null)
+                {
+                    outProp.SetValue(instance, outTagObj.ToString().Trim());
+                    Debug.WriteLine($"[MAPPER] Port 'Out' mapped: '{outTagObj}'");
+                }
+                else
+                {
+                    outProp.SetValue(instance, null);
+                }
+            }
+
+            // === ПОРТ 3. PARAMS ===
+            var paramsProp = type.GetProperty("Params", BindingFlags.Public | BindingFlags.Instance);
+            if (paramsProp != null && paramsProp.CanWrite)
+            {
                 try
                 {
-                    object finalValue = rawValue;
+                    var attr = paramsProp.GetCustomAttribute<AiParamAttribute>();
+                    Type schemaType = attr?.SchemaType ?? typeof(DynamicBimContract);
+                    var paramsContract = (DynamicBimContract)Activator.CreateInstance(schemaType);
 
-                    // 1. КОНВЕРТАЦИЯ ТИПОВ (JToken -> C# Type)
-                    if (finalValue is JToken jToken)
+                    if (parameters.TryGetValue("Params", out var rawParamsObj) && rawParamsObj != null)
                     {
-                        finalValue = jToken.ToObject(prop.PropertyType);
+                        Dictionary<string, object> innerParams = null;
+
+                        if (rawParamsObj is JObject jObj)
+                            innerParams = jObj.ToObject<Dictionary<string, object>>();
+                        else if (rawParamsObj is string jsonStr)
+                            innerParams = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonStr);
+                        else
+                            innerParams = rawParamsObj as Dictionary<string, object>;
+
+                        if (innerParams != null)
+                        {
+                            var schemaProps = schemaType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+                            foreach (var kp in innerParams)
+                            {
+                                // 1. Всегда пишем в базовый словарь контракта
+                                paramsContract.Set(kp.Key, kp.Value);
+
+                                // 2. Умная запись в автосвойства схемы
+                                var sProp = schemaProps.FirstOrDefault(p => p.Name.Equals(kp.Key, StringComparison.OrdinalIgnoreCase));
+                                if (sProp != null && sProp.CanWrite && kp.Value != null)
+                                {
+                                    try
+                                    {
+                                        if (kp.Value is JToken token)
+                                        {
+                                            if (sProp.PropertyType == typeof(List<Dictionary<string, object>>))
+                                            {
+                                                var typedList = token.ToObject<List<Dictionary<string, object>>>();
+                                                var caseInsensitiveList = typedList
+                                                    .Select(d => new Dictionary<string, object>(d, StringComparer.OrdinalIgnoreCase))
+                                                    .ToList();
+
+                                                sProp.SetValue(paramsContract, caseInsensitiveList);
+                                            }
+                                            else
+                                            {
+                                                sProp.SetValue(paramsContract, token.ToObject(sProp.PropertyType));
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // Записываем простое значение, ТОЛЬКО если это не JToken
+                                            sProp.SetValue(paramsContract, kp.Value);
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Debug.WriteLine($"[MAPPER] Non-critical mapping fail for property '{kp.Key}': {ex.Message}");
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    // 2. ОБРАБОТКА ЕДИНИЦ (Только для double)
-                    if (prop.PropertyType == typeof(double))
-                    {
-                        // Используем ваш Util для перевода "500mm" -> 1.6404 (feet)
-                        finalValue = Util.ParseToRevitFeet(finalValue);
-                    }
-
-                    // 3. ПРИВЕДЕНИЕ ТИПОВ (Для простых типов)
-                    else if (!prop.PropertyType.IsAssignableFrom(finalValue.GetType()))
-                    {
-                        finalValue = Convert.ChangeType(finalValue, prop.PropertyType);
-                    }
-
-                    prop.SetValue(instance, finalValue);
-                    // Debug.WriteLine($"[MAPPER] Property {prop.Name} set to: {finalValue}");
+                    // ФИКС: Просто инжектируем paramsContract. .NET примет его без кастов, 
+                    // так как у всех команд тип свойства Params — это DynamicBimContract!
+                    paramsProp.SetValue(instance, paramsContract);
+                    Debug.WriteLine($"[MAPPER] Port 'Params' successfully populated for {schemaType.Name}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[MAPPER] !!! Error mapping '{prop.Name}': {ex.Message}");
+                    Debug.WriteLine($"[MAPPER] !!! Critical Error in Params mapping: {ex.Message}");
+                    throw;
                 }
             }
         }

@@ -1,65 +1,103 @@
 ﻿using AtomixAI.Core;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Autodesk.Revit.UI.Selection;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Windows.Controls.Primitives;
+using System.Xml.Linq;
 
 namespace AtomixAI.Atomic.Commands
 {
-
-    [AtomicInfo(
-    name: "search_elements",
+    [AiInfo(
+    name: "search_init",
     group: AtomicGroupType.Search,
-    description: "Complex element search using a pipeline of filters (Category, Level, Parameter, etc.). Use the command to search for elements when asking find, search, or how many.",
-    keywords: new[] { "search", "how many", "find" })]
-    public class SearchElementCmd : BaseAtomicCommand,  IAtomicCommandSearch
+    description: "Initializes the search boundary and gathers the initial set of elements. This command cannot be run independently, you MUST specify the search entity.",
+    keywords: new[] { "search", "find", })]
+    public class SearchInitCmd : BaseAtomicCommand
     {
-        [AtomicParam("List of search filters. Format: [{ 'Kind': 'Category', 'CategoryName': 'OST_Walls' }, { 'Kind': 'Level', 'LevelName': 'Level 1' }]")]
-        public List<Dictionary<string, object>> Filters { get; set; }
+        public class SearchInitSchema : DynamicBimContract
+        {
+            [AiParam(@"The exact target boundary where the search must start. Allowed values:
+- 'active view':  Assign this scope to find physical elements/instances only if the user explicitly requests them 'here', 'in this view', 'on this sheet', or 'in the current view' or ALWAYS USE this if the search location is specified.
+- 'project': Use this option to search for physical elements/instances when the user EXPLICITLY asks to search the entire project, such as 'everywhere', 'entire project', or 'all model elements'.
+- 'selection': Use this option to find physical elements/instances when the user specifies 'selected', 'in selection', or 'currently highlighted elements'.
+- 'element types': Use this option ONLY if the user explicitly requests types rather than physical instances, using words like 'types', 'symbols', or 'family definitions' (e.g., 'find door types', 'get wall types').",
+            isRequired: true)]
+            public string Scope { get; set; }
+        }
+
+        [AiParam(schema: typeof(SearchInitSchema), type: "json", isRequired: true)]
+        public DynamicBimContract Params { get; set; }
 
         protected override AtomicResult Execute(ITransactionHandler handler)
         {
-            FilteredElementCollector collector = null;
-
             UIDocument uidoc = handler.UIDoc;
+            Document doc = uidoc.Document;
 
-            Debug.WriteLine($"[{this.GetType().Name}] started");
+            var initParams = (SearchInitSchema)this.Params;
 
-            /*var result = GetInput(out List<ElementId> inputData);
+            string scope = initParams?.Scope ?? "active view";
 
-            if (!result.Success) return result;*/
+            System.Diagnostics.Debug.WriteLine($"[SEARCH_INIT] '{scope}'.");
 
-            // 2. Логика поиска (AtomicSearchFactory)
-            var factory = new AtomicSearchFactory();
+            FilteredElementCollector collector;
 
-            Debug.WriteLine($"[{this.GetType().Name}] factory class: {factory.ToString()}");
-
-            var filterChain = factory.CreateFilterChain(this.Filters);
-
-            Debug.WriteLine($"[{this.GetType().Name}] factory Count: {filterChain.Count}");
-
-            foreach (var filter in filterChain)
+            // Переключаем логику сбора в зависимости от параметра
+            switch (scope.ToLower())
             {
-                collector = filter.Apply(uidoc, collector);
+
+                case "project":
+                default:
+                    // Собираем вообще все элементы проекта (только экземпляры, не типы)
+                    collector = new FilteredElementCollector(doc)
+                        .WhereElementIsNotElementType();
+                    break;
+
+                case "selection":
+                    // Забираем то, что пользователь уже выделил руками в Revit
+                    collector = new FilteredElementCollector(doc, uidoc.Selection.GetElementIds());
+                    break;
+
+                case "active view":                
+                    System.Diagnostics.Debug.WriteLine($"[SEARCH_INIT] activeview work.");
+                    // По умолчанию собираем все видимые элементы на активном виде
+                    collector = new FilteredElementCollector(doc, uidoc.ActiveView.Id);
+                    break;
+                case "element types":
+                    collector = new FilteredElementCollector(doc)
+                        .WhereElementIsElementType();
+                    break;
             }
 
-            var elementIds = collector?.ToElementIds().ToList() ?? new List<ElementId>();
+            int count = collector.GetElementCount();
 
-            // 3. Управление ВЫХОДОМ (Out)
-            if (elementIds.Count == 0)
+            System.Diagnostics.Debug.WriteLine($"[SEARCH_INIT] collectior count'{count}'.");
+
+            // Если область пустая (например, выбрали Selection, а ничего не выделено)
+            if (collector == null || collector.GetElementCount() == 0)
             {
-                return SetOutput(null, 0, false); //false если ошибка если оборавать код, иначе он продолжится в цепочке
+                return SetOutput(null, 0, false, $"Search initialization failed. No elements found in scope '{scope}'.");
             }
 
-            Debug.WriteLine($"[{this.GetType().Name}] elementIds: {elementIds.ToString()}");
+            System.Diagnostics.Debug.WriteLine($"[SEARCH_INIT] Scope '{scope}' initialized with {count} elements. Stored in '{Out}'.");
 
-            return SetOutput(elementIds, elementIds.Count, true, $"Found {elementIds.Count} elements. Stored in '{Out}'.");
+            var contract = new DynamicBimContract();
+
+            contract.Set(BimKeys.Search.Collector, collector);
+
+            //var words = Regex.Replace(scope, @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ").ToLower();
+
+            // Передаем плоский список List<ElementId> в AtomicStorage под тегом Out!
+            return SetOutput(contract, count, true, $"IMPORTANT for FINAL report: initialized {scope} scope.");
         }
     }
 }

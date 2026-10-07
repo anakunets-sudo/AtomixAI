@@ -29,7 +29,7 @@ namespace AtomixAI.Atomic
                 _filterCache = Assembly.GetAssembly(typeof(AtomicSearchFactory))
                     .GetTypes()
                     .Where(p => typeof(ISearchFilter).IsAssignableFrom(p) && !p.IsInterface && !p.IsAbstract)
-                    .Select(t => new { Type = t, Info = t.GetCustomAttribute<AtomicInfoAttribute>() })
+                    .Select(t => new { Type = t, Info = t.GetCustomAttribute<AiInfoAttribute>() })
                     .Where(x => x.Info != null)
                     .ToDictionary(x => x.Info.Name.Replace("_", "").ToLower(), x => x.Type);
             }
@@ -63,7 +63,7 @@ namespace AtomixAI.Atomic
 
             foreach (var prop in props)
             {
-                var attr = prop.GetCustomAttribute<AtomicParamAttribute>();
+                var attr = prop.GetCustomAttribute<AiParamAttribute>();
                 if (attr == null) continue;
 
                 // Find the value in the dictionary by property name or "Value"/"value" key

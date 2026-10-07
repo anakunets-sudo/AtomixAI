@@ -13,36 +13,41 @@ using System.Threading.Tasks;
 namespace AtomixAI.Atomic.Commands
 {
 
-    [AtomicInfo(
+    [AiInfo(
     name: "select_elements",
     group: AtomicGroupType.Search,
-    description: "PHYSICAL ACTION: Highlights elements in the Revit UI. Not used as a first command. IMPORTANT: This tool does NOT search. It ONLY takes an existing tag from the previous command and makes it visible/selected for the user.",
+    description: "Selects elements from previous tool output. Never use as the first command. Action: Highlights elements in model.",
     keywords: new[] { "select"})]
     public class SelectElementsCmd : BaseAtomicCommand
     {
         protected override AtomicResult Execute(ITransactionHandler handler)
         {
-            // 1. Пытаемся получить данные. GetInput сам проверит In или _last.
-            // Если в хранилище лежит один ElementId, наш маппер в Dispatcher-е 
-            // уже должен был обернуть его в список (или мы делаем это тут).
-            var inputResult = GetInput(out List<ElementId> toSelected);
+            System.Diagnostics.Debug.WriteLine($"[SELECT_ELEMENTS] START");
 
-            Debug.WriteLine($"[{this.GetType().Name}] inputResult: {inputResult.ToString()}");
+            if (!GetInput(out DynamicBimContract toSelected).Success)
+            {
+                return AtomicResult.Error("Failed to get input data.");
+            }
 
-            if (!inputResult.Success)
-                return inputResult; // Возвращаем ошибку "Chain broken" или "Type mismatch"
+            toSelected.Get(BimKeys.Elements.ElementIds, out List<ElementId> elementIds);
 
-            if (toSelected == null || toSelected.Count == 0)
+            if (elementIds == null || elementIds.Count == 0)
+            {
+                return AtomicResult.Error("No element IDs found in input data.");
+            }
+
+            if (elementIds == null || elementIds.Count == 0)
                 return AtomicResult.Error("Список элементов для выделения пуст.");
 
             // 2. Действие в Revit
-            handler.UIDoc.Selection.SetElementIds(toSelected);
+            handler.UIDoc.Selection.SetElementIds(elementIds);
 
             // 3. УМНЫЙ ВЫХОД:
             // Передаем storageValue = null, так как мы НЕ МЕНЯЛИ данные.
             // Наш новый BaseAtomicCommand сам вызовет AtomicStorage.Link(In, Out).
             // ИИ получит в 'data' количество элементов через ExtractData(Get(In)).
-            return SetOutput(null, toSelected.Count, true, $"Successfully selected {toSelected.Count} elements.");
+
+            return SetOutput(null, elementIds.Count, true, $"Successfully selected {elementIds.Count} elements.");
         }
     }
 }

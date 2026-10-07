@@ -12,11 +12,11 @@ namespace AtomixAI.Core
 
     public static class AtomicStorage
     {
-        private static readonly Dictionary<string, StorageSlot> _data = new Dictionary<string, StorageSlot>();
+        private static readonly Dictionary<string, StorageSlot> _data = new Dictionary<string, StorageSlot>(StringComparer.OrdinalIgnoreCase);
         private static readonly List<string> _history = new List<string>();
         private static readonly object _lockObj = new object();
-        public static int MaxCapacity { get; set; } = 100;
-        private const string LAST_KEY = "#_last";
+        public static int MaxCapacity { get; set; } = 1000;
+        //private const string LAST_KEY = "#_last";
 
         // --- ТОТ САМЫЙ МЕТОД ДЛЯ TRANSACTION MANAGER ---
         public static string[] GetCurrentContext()
@@ -39,10 +39,10 @@ namespace AtomixAI.Core
 
                 var newSlot = new StorageSlot { Value = value };
                 newSlot.Tags.Add(tag);
-                newSlot.Tags.Add(LAST_KEY);
+                //newSlot.Tags.Add(LAST_KEY);
 
                 _data[tag] = newSlot;
-                _data[LAST_KEY] = newSlot;
+                //_data[LAST_KEY] = newSlot;
 
                 UpdateHistory(tag);
                 CheckCapacity();

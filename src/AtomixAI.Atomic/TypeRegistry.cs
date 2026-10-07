@@ -77,7 +77,7 @@ namespace AtomixAI.Atomic
 
             foreach (var type in types)
             {
-                var attr = type.GetCustomAttribute<AtomicInfoAttribute>();
+                var attr = type.GetCustomAttribute<AiInfoAttribute>();
                 var keys = new List<string>();
 
                 // 1. Ключ из атрибута (priority)

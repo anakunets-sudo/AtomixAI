@@ -6,14 +6,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+/*
 namespace AtomixAI.Atomic.Commands
 {
     /// <summary>
     /// Initializer that creates a base collector for the entire Revit project.
     /// Always has the highest priority (0) to start the search chain.
     /// </summary>
-    [AtomicInfo(
+    [AiInfo(
     name: "scope_selected_elements",
     group: AtomicGroupType.Search,
     description: "In the selected elements search initializer.",
@@ -42,3 +42,4 @@ namespace AtomixAI.Atomic.Commands
         }
     }
 }
+*/
