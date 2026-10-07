@@ -10,7 +10,7 @@ from vosk import Model, KaldiRecognizer
 UDP_CMD_PORT = 5006
 PIPE_NAME = r'\\.\pipe\AtomixAI_Vocal_Pipe'
 # Убедись, что путь к модели верный
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "model", "vosk-model-small-ru-0.22")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "model", "vosk-model-en-us-0.22-lgraph")
 
 is_listening = False  # Флаг от UDP (кнопка вкл/выкл)
 
