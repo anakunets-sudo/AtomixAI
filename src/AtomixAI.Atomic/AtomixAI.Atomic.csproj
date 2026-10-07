@@ -7,11 +7,12 @@
     <!-- Включаем поддержку Windows (WPF/WinForms) для интерфейсов -->
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2025</Configurations>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AtomixAI.Core\AtomixAI.Core.csproj" />
   </ItemGroup>
+
 
 </Project>

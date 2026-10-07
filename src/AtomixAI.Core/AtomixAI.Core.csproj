@@ -6,11 +6,15 @@
     
     <!-- Для работы с Revit UI элементами, если понадобятся -->
     <UseWPF>false</UseWPF>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2025</Configurations>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- Глобальные зависимости для SDK, если нужны (например, JSON.NET) -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Autodesk.Revit.Sdk.Refs.2026" Version="1.2.0" />
   </ItemGroup>
 </Project>

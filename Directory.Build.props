@@ -4,10 +4,16 @@
     <Version>1.0.0</Version>
     <LangVersion>latest</LangVersion>
     <Platforms>x64</Platforms>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026</Configurations>
+    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2026|x64'">
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2027|x64'">
     <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
     <Optimize>false</Optimize>
     <DebugSymbols>true</DebugSymbols>
@@ -25,23 +31,29 @@
     <RevitVersion Condition="$(Configuration.Contains('2019'))">2019</RevitVersion>
     <RevitVersion Condition="$(Configuration.Contains('2025'))">2025</RevitVersion>
     <RevitVersion Condition="$(Configuration.Contains('2026'))">2026</RevitVersion>
+    <RevitVersion Condition="$(Configuration.Contains('2027'))">2027</RevitVersion>
 
     <!-- Логика TargetFramework -->
-    <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025' AND '$(RevitVersion)' &lt; '2027'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2027'">net10.0-windows</TargetFramework>
     <TargetFramework Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' &lt; '2025'">net48</TargetFramework>
 
     <!-- Настройки UI и совместимости -->
     <UseWPF>true</UseWPF>
-    <ImportWindowsDesktopTargets Condition="'$(TargetFramework)' == 'net8.0-windows'">true</ImportWindowsDesktopTargets>
+    <ImportWindowsDesktopTargets Condition="'$(TargetFramework)' == 'net8.0-windows' OR '$(TargetFramework)' == 'net10.0-windows'">true</ImportWindowsDesktopTargets>
     <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
     <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
 
     <!-- Глобальные константы C# -->
     <DefineConstants Condition="'$(RevitVersion)' != ''">$(DefineConstants);REVIT$(RevitVersion)</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2021'">$(DefineConstants);REVIT2021_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2022'">$(DefineConstants);REVIT2022_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2023'">$(DefineConstants);REVIT2023_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2024'">$(DefineConstants);REVIT2024_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2025'">$(DefineConstants);REVIT2025_OR_GREATER</DefineConstants>
     <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2026'">$(DefineConstants);REVIT2026_OR_GREATER</DefineConstants>
+    <DefineConstants Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' >= '2027'">$(DefineConstants);REVIT2027_OR_GREATER</DefineConstants>
   </PropertyGroup>
 
   <!-- 3. Настройка путей сборки (только для Revit проектов) -->
@@ -53,13 +65,20 @@
 
   <!-- 4. Настройка отладки (F5) -->
   <PropertyGroup Condition="$(Configuration.Contains('Debug')) AND '$(RevitVersion)' != ''">
+    <!-- VS fast up-to-date check иначе сам копирует wwwroot в bin и не запускает MSBuild, так что DeployToRevit пропускается -->
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
     <StartAction>Program</StartAction>
     <StartProgram>C:\Program Files\Autodesk\Revit $(RevitVersion)\Revit.exe</StartProgram>
   </PropertyGroup>
 
   <!-- 5. Подключение SDK через NuGet -->
-  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(RevitVersion)' != ''">
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(RevitVersion)' != '' AND '$(RevitVersion)' != '2027'">
     <PackageReference Include="Autodesk.Revit.Sdk.Refs.$(RevitVersion)" Version="*" PrivateAssets="All" />
+  </ItemGroup>
+  <!-- Sdk.Refs.2027 ещё не опубликован: те же ссылки RevitAPI / RevitAPIUI, что тянет пакет 2026 -->
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(RevitVersion)' == '2027'">
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.3.0" PrivateAssets="All" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.3.0" PrivateAssets="All" />
   </ItemGroup>
 
   <!-- 6. ТАРГЕТЫ (Kill, Clean, Deploy) -->
