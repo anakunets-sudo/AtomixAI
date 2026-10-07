@@ -16,7 +16,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"User wants to create a wall. The 'create_wall' command requires a mandatory parameter 'Length', which is missing. I must ask the user for the missing parameter directly.\", \"active_context_tag\": \"Length\", \"user_facing_message\": \"Please specify wall length, for example, 6000 mm or 10 feet?\", \"sequence\": []}"
+                "arguments": "{\"thought\": \"User wants to create a wall. The 'create_wall' command requires a mandatory parameter 'Length', which is missing. I must ask the user for the missing parameter directly.\", \"active_context_tag\": \"Length\", \"sequence\": [], \"user_facing_message\": \"Please specify wall length, for example, 6000 mm or 10 feet?\"}"
             }
         }]
     },
@@ -40,7 +40,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find all walls. I will initialize the search on the active view first, then pass the resulting tag to the fast filtering tool to restrict elements strictly to walls.\", \"active_context_tag\": \"\", \"user_facing_message\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#search_elements_1\"}}]}"
+                "arguments": "{\"thought\": \"The user wants to find all walls. I will initialize the search on the active view first, then pass the resulting tag to the fast filtering tool to restrict elements strictly to walls.\", \"active_context_tag\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#search_elements_1\"}}], \"user_facing_message\": \"Ich suche jetzt auf der aktiven Ansicht alle Wände.\"}"
             }
         }]
     },  
@@ -64,7 +64,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to count the number of doors. I will run a search on the active view and then filter the elements by the OST_Doors category. I will report the number of elements and the tag '#' associated with them.\", \"active_context_tag\": \"\", \"user_facing_message\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_2\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_2\", \"Params\": {\"Categories\": [\"OST_Doors\"]}, \"Out\": \"#found_doors_1\"}}]}"
+                "arguments": "{\"thought\": \"The user wants to count the number of doors. I will run a search on the active view and then filter the elements by the OST_Doors category. I will report the number of elements and the tag '#' associated with them.\", \"active_context_tag\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_2\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_2\", \"Params\": {\"Categories\": [\"OST_Doors\"]}, \"Out\": \"#found_doors_1\"}}], \"user_facing_message\": \"I'll search this view for doors and count them.\"}"
             }
         }]
     },
@@ -88,7 +88,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find roofs on a specific level. I must first initialize the project scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the spatial level filter for 'Level 2'.\", \"active_context_tag\": \"\", \"user_facing_message\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"Project\"}, \"Out\": \"#init_elements_roofs\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_roofs\", \"Params\": {\"Categories\": [\"OST_Roofs\"]}, \"Out\": \"#only_roofs_1\"}}, {\"name\": \"filter_spatial\", \"arguments\": {\"In\": \"#only_roofs_1\", \"Params\": {\"Levels\": [\"Level 2\"]}, \"Out\": \"#search_elements_2\"}}]}"
+                "arguments": "{\"thought\": \"The user wants to find roofs on a specific level. I must first initialize the project scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the spatial level filter for 'Level 2'.\", \"active_context_tag\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"Project\"}, \"Out\": \"#init_elements_roofs\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_roofs\", \"Params\": {\"Categories\": [\"OST_Roofs\"]}, \"Out\": \"#only_roofs_1\"}}, {\"name\": \"filter_spatial\", \"arguments\": {\"In\": \"#only_roofs_1\", \"Params\": {\"Levels\": [\"Level 2\"]}, \"Out\": \"#search_elements_2\"}}], \"user_facing_message\": \"I'll search the project for roofs on Level 2.\"}"
             }
         }]
     },
@@ -112,7 +112,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find roofs exclude #roof_created_1. I must first initialize the ActiveView scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the select_except command to exclude the specified roof.\", \"active_context_tag\": \"\", \"user_facing_message\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_roofs\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_roofs\", \"Params\": {\"Categories\": [\"OST_Roofs\"]}, \"Out\": \"#only_roofs_1\"}}, {\"name\": \"select_except\", \"arguments\": {\"In\": \"#only_roofs_1\", \"Params\": {\"ExceptTag\": \"#roof_created_1\"}, \"Out\": \"#search_roofs_excluded_created_1\"}}]}"
+                "arguments": "{\"thought\": \"The user wants to find roofs exclude #roof_created_1. I must first initialize the ActiveView scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the select_except command to exclude the specified roof.\", \"active_context_tag\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_roofs\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_roofs\", \"Params\": {\"Categories\": [\"OST_Roofs\"]}, \"Out\": \"#only_roofs_1\"}}, {\"name\": \"select_except\", \"arguments\": {\"In\": \"#only_roofs_1\", \"Params\": {\"ExceptTag\": \"#roof_created_1\"}, \"Out\": \"#search_roofs_excluded_created_1\"}}], \"user_facing_message\": \"I'll find roofs on this view and exclude #roof_created_1.\"}"
             }
         }]
     },
@@ -142,7 +142,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to select elements on the current view but did not specify the target category or entity. No total-scope keywords like 'everything' were used. According to the <TARGET_ENTITY_MANDATE>, I must halt execution, lock context, and ask for target categories.\", \"active_context_tag\": \"Categories\", \"user_facing_message\": \"I’m ready to do that! Please let me know exactly which elements to highlight in this view, for example, walls, windows, doors, or air ducts.?)\", \"sequence\": []}"
+                "arguments": "{\"thought\": \"The user wants to select elements on the current view but did not specify the target category or entity. No total-scope keywords like 'everything' were used. According to the <TARGET_ENTITY_MANDATE>, I must halt execution, lock context, and ask for target categories.\", \"active_context_tag\": \"Categories\", \"sequence\": [], \"user_facing_message\": \"I’m ready to do that! Please let me know exactly which elements to highlight in this view, for example, walls, windows, doors, or air ducts.?)\"}"
             }
         }]
     },
@@ -166,7 +166,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find walls based on a dimensional parameter. I will initialize the search on the active view, filter strictly by the OST_Walls category to isolate instances, and then apply a parameter filter for the 'Width' property using the '>' operator with a value of '200mm'.\", \"active_context_tag\": \"\", \"user_facing_message\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_walls_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_walls_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#only_walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#only_walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Width\", \"Operator\": \">\", \"Value\": \"200mm\", \"StorageType\": \"Double\"}, \"Out\": \"#final_thick_walls_1\"}}]}"
+                "arguments": "{\"thought\": \"The user wants to find walls based on a dimensional parameter. I will initialize the search on the active view, filter strictly by the OST_Walls category to isolate instances, and then apply a parameter filter for the 'Width' property using the '>' operator with a value of '200mm'.\", \"active_context_tag\": \"\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_walls_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_walls_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#only_walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#only_walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Width\", \"Operator\": \">\", \"Value\": \"200mm\", \"StorageType\": \"Double\"}, \"Out\": \"#final_thick_walls_1\"}}], \"user_facing_message\": \"I'll find walls thicker than 200 mm on this view.\"}"
             }
         }]
     },
@@ -190,7 +190,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user is speaking politely. I need to steer the conversation toward working in Revit.\", \"active_context_tag\": \"\", \"user_facing_message\": \"I’m doing great and am fully ready to work on your BIM model. What will we set up or build today?\", \"sequence\": []}"
+                "arguments": "{\"thought\": \"The user is speaking politely. I need to steer the conversation toward working in Revit.\", \"active_context_tag\": \"\", \"sequence\": [], \"user_facing_message\": \"I’m doing great and am fully ready to work on your BIM model. What will we set up or build today?\"}"
             }
         }]
     },
@@ -212,7 +212,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to know about the AI ​​model. I should state that I am a large language model trained by an independent team of developers to work with Revit.\", \"active_context_tag\": \"\", \"user_facing_message\": \"Ich bin ein umfangreiches industrielles Sprachmodell (LLM), das von einem unabhängigen Entwicklerteam trainiert wurde. Ich stehe Ihnen gerne bei Revit zur Seite.\", \"sequence\": []}"
+                "arguments": "{\"thought\": \"The user wants to know about the AI ​​model. I should state that I am a large language model trained by an independent team of developers to work with Revit.\", \"active_context_tag\": \"\", \"sequence\": [], \"user_facing_message\": \"Ich bin ein umfangreiches industrielles Sprachmodell (LLM), das von einem unabhängigen Entwicklerteam trainiert wurde. Ich stehe Ihnen gerne bei Revit zur Seite.\"}"
             }
         }]
     },
@@ -235,7 +235,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"ORIGINAL_MESSAGE pertains to a bim tool call. REFINEMENT_MESSAGE_1 constitutes spam. I am considering only ORIGINAL_MESSAGE, for which I need to call 'search_init' and populate 'active_context_tag' with the missing 'search_init:Scope' parameter.\", \"active_context_tag\": \"search_init:Scope\", \"user_facing_message\": \"I cannot get sidetracked by off-topic matters. Please specify the search scope (active view or project) or the element category.\", \"sequence\": []}"
+                "arguments": "{\"thought\": \"ORIGINAL_MESSAGE pertains to a bim tool call. REFINEMENT_MESSAGE_1 constitutes spam. I am considering only ORIGINAL_MESSAGE, for which I need to call 'search_init' and populate 'active_context_tag' with the missing 'search_init:Scope' parameter.\", \"active_context_tag\": \"search_init:Scope\", \"sequence\": [], \"user_facing_message\": \"I cannot get sidetracked by off-topic matters. Please specify the search scope (active view or project) or the element category.\"}"
             }
         }]
     },

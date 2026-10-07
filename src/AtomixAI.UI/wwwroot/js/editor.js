@@ -9,6 +9,15 @@ window.Atomix.EditorController = {
         document.addEventListener('keydown', (e) => {
             const menu = window.Atomix.MenuController;
             if (!menu || !menu.isOpen) return;
+            if (menu.isSearchFocused && menu.isSearchFocused()) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    menu.applySearch();
+                    return;
+                }
+                if (e.key !== 'Escape') return;
+            }
             const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft', 'Enter', 'Escape'];
             if (navKeys.includes(e.key)) {
                 // Если фокус улетел из поля ввода (например, кликнули на меню), возвращаем его

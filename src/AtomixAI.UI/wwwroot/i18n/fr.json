@@ -33,6 +33,9 @@
   "menu.selection": "Sélection",
   "menu.commands": "Commandes",
   "menu.back": "Retour",
+  "menu.search": "Rechercher",
+  "menu.search.placeholder": "Rechercher...",
+  "menu.noResults": "Aucun résultat",
 
   "selection.pickInView": "Sélectionner des éléments dans la vue",
   "selection.pickPrompt": "Sélectionnez des éléments, puis cliquez sur Terminer",

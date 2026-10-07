@@ -33,6 +33,9 @@
   "menu.selection": "选择集",
   "menu.commands": "命令",
   "menu.back": "返回",
+  "menu.search": "搜索",
+  "menu.search.placeholder": "搜索...",
+  "menu.noResults": "无结果",
 
   "selection.pickInView": "在视图中选择图元",
   "selection.pickPrompt": "选择图元，然后单击“完成”",

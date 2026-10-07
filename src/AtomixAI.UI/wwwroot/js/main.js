@@ -10,12 +10,24 @@ let isWorking = false;
 let chatTurn = 0;
 let cancelledTurn = 0;
 
+// Одна строка при пустом поле и при тексте. 42px после отправки поднимало блок:
+// плейсхолдер оказывался над кнопками, а набранный текст — в один ряд с ними.
+function resizeInputField() {
+    inputField.style.height = 'auto';
+    const lineHeight = parseFloat(getComputedStyle(inputField).lineHeight) || 0;
+    const next = Math.min(Math.max(inputField.scrollHeight, lineHeight), 150);
+    inputField.style.height = next + 'px';
+}
+
 inputField.addEventListener('input', function () {
     // Для div выкарыстоўваецца textContent, а не value!
     if (this.textContent.trim() === '') {
         inputField.innerHTML = '';
     }
+    resizeInputField();
 });
+
+resizeInputField();
 
 // Слушаем событие ПЕРЕХВАТА вставки на уровне всего документа
 document.addEventListener('paste', function (e) {
@@ -155,7 +167,7 @@ function sendMessage() {
     });
 
     inputField.innerHTML = '';
-    inputField.style.height = '42px';
+    resizeInputField();
 }
 
 const messageSanitizeConfig = {
@@ -240,6 +252,17 @@ function handleAIResponse(data) {
     // Отменённый ход уже показан как «Cancelled». Поздний ui_log не подменяет его и не создаёт новое сообщение.
     if (data.role === 'ai' && isStaleOrCancelledReply(data)) return;
 
+    // Превью приказа: текст в пузыре «думаю», Revit ещё выполняет sequence.
+    if (data.phase === 'plan' && thinkingMsgId) {
+        const msgEl = document.getElementById(thinkingMsgId);
+        const label = msgEl && msgEl.querySelector('.thinking-label');
+        if (label && data.content) {
+            label.textContent = data.content;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        return;
+    }
+
     setBusy(false);
     if (thinkingMsgId && data.role === 'ai') {
         const msgEl = document.getElementById(thinkingMsgId);
@@ -256,15 +279,14 @@ function handleAIResponse(data) {
     }
 }
 
-// Анимация "Думаю..." с точками и отменой
+// Курсивный текст с цветовым переливом и кнопкой отмены
 function appendThinkingMessage() {
     const id = 'msg-' + Math.random().toString(36).substr(2, 9);
     const msgDiv = document.createElement('div');
     msgDiv.id = id;
     msgDiv.className = 'msg ai thinking-state';
     msgDiv.innerHTML = `
- <div class="thinking-dots"><span></span><span></span><span></span></div>
- <span>${window.Atomix.t('chat.thinking', 'Synthesizing logic...')}</span>
+ <span class="thinking-label">${window.Atomix.t('chat.thinking', 'Synthesizing logic...')}</span>
  <a class="cancel-btn-link" onclick="cancelAction()">${window.Atomix.t('chat.cancel', 'Cancel')}</a>
  `;
     chatContainer.appendChild(msgDiv);
@@ -401,10 +423,6 @@ inputField.addEventListener('keydown', e => {
     }
 });
 
-inputField.addEventListener('input', function () {
-    this.style.height = 'auto';
-    this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px';
-});
 
 // --- SMART TOOLTIP ENGINE ---
 const tip = document.createElement('div');

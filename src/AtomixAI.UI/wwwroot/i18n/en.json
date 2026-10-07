@@ -33,6 +33,9 @@
   "menu.selection": "Selection",
   "menu.commands": "Commands",
   "menu.back": "Back",
+  "menu.search": "Search",
+  "menu.search.placeholder": "Search...",
+  "menu.noResults": "No results",
 
   "selection.pickInView": "Pick elements in view",
   "selection.pickPrompt": "Pick elements, then click Finish",

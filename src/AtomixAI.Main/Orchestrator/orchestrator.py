@@ -87,10 +87,6 @@ bim_sequence_tool = {
                     "type": "string",
                     "description": "MANDATORY: Analyze each message in <USER_REQUEST_PAYLOAD>. Exclude messages that constitute spam. If the user request is missing any mandatory parameter for a tool, populate this field using the strict format 'ToolName:ParameterName' (e.g., 'filter_elements:Categories' or 'create_wall:Length'). Return an EMPTY string \"\" if all tools are fully ready for operation and no clarifications are required."
                 },
-                "user_facing_message": {
-                    "type": "string",
-                    "description": "CRITICAL: If 'active_context_tag' is populated with a missing parameter, write a warm, direct, short question to the engineer, asking specifically for the missing parameter. Keep it scannable for a narrow UI. Leave completely EMPTY ('') if everything is ready."
-                },
                 "sequence": {
                     "type": "array",
                     "description": "Sequential array of BIM commands to execute in Revit. Predict and build the full pipeline layout immediately, even if some required arguments are currently missing and empty!",
@@ -110,9 +106,20 @@ bim_sequence_tool = {
                         },
                         "required": ["name", "arguments"]
                     }
+                },
+                "user_facing_message": {
+                    "type": "string",
+                    "description": (
+                        "Write this AFTER 'sequence'. Message shown to the engineer in the UI. Keep it scannable (1-2 short sentences). "
+                        "If 'active_context_tag' is populated: a warm, direct question asking for the missing parameter. "
+                        "If 'sequence' is complete and will execute now: a short preview of THAT sequence — "
+                        "name the tools and key arguments in plain language. Use future / about-to-start tense. "
+                        "Do NOT greet. Do NOT claim the work is already done. Do NOT dump raw JSON. "
+                        "Leave EMPTY ('') only for small talk without a sequence."
+                    )
                 }
             },
-            "required": ["thought", "active_context_tag", "user_facing_message", "sequence"] 
+            "required": ["thought", "active_context_tag", "sequence", "user_facing_message"] 
         }
     }
 }
@@ -404,6 +411,7 @@ def process_ai_logic(user_text, client, generation=0):
             \
             f"<LOCALIZATION_DIRECTIVES>\n"
             f"You MUST write the 'user_facing_message' field strictly in {detected_lang}.\n"
+            f"When a sequence is ready to execute, user_facing_message MUST preview the Revit order before it runs.\n"
             f"</LOCALIZATION_DIRECTIVES>\n"
             \
             f"<TARGET_LANGUAGE>{detected_lang}</TARGET_LANGUAGE>\n"
@@ -554,6 +562,16 @@ def process_ai_logic(user_text, client, generation=0):
         execution_result = {"success": False, "message": "No action taken"}
 
         if ai_sequence:
+            if ai_user_msg:
+                log(f"[*] Plan preview before Revit: {ai_user_msg}")
+                exchange(client, {
+                    "action": "ui_log",
+                    "role": "ai",
+                    "phase": "plan",
+                    "content": ai_user_msg,
+                    "turn": generation,
+                }, generation)
+
             log(f"[*] Sending the sequence to Revit: {len(ai_sequence)} steps...")
             revit_res, _ = exchange(client, {
                 "action": "call_batch",
