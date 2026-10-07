@@ -1,0 +1,49 @@
+{
+  "nav.brand.tooltip": "BIM Wave: Kontextbezogene Intelligenz. Ausführung in Revit.",
+  "nav.free": "BIM Wave Free",
+  "nav.python": "Python-Skripte",
+  "nav.python.tooltip": "Ihre pyRevit-Skriptbibliothek",
+  "nav.patternLab": "Pattern Lab",
+  "nav.patternLab.tooltip": "KI-Muster trainieren und anpassen",
+
+  "chat.greetings": [
+    "Hallo! Ich bin Livvy, Ihre BimWave-KI-Assistentin. Woran arbeiten wir heute?",
+    "Willkommen zurück! Hier ist Livvy – wobei kann ich Ihnen in Revit helfen?",
+    "Hi, ich bin Livvy. Beschreiben Sie Ihre Aufgabe, den Rest erledige ich in Revit."
+  ],
+  "chat.listening": "Warte auf Befehle...",
+  "chat.thinking": "Logik wird erstellt...",
+  "chat.cancel": "Abbrechen",
+  "chat.cancelled": "Vom Benutzer abgebrochen",
+
+  "input.placeholder": "Ablauf beschreiben... [Enter zum Senden]",
+  "input.voice": "Spracheingabe",
+  "input.send": "Senden",
+
+  "footer.settings": "Umgebungseinstellungen anzeigen",
+  "footer.aiCore": "KI-Kern:",
+  "footer.aiModel": "KI-Modell:",
+
+  "rate.markSolution": "Als Lösung markieren",
+  "rate.markedSolution": "Als Lösung markiert",
+  "rate.markError": "Als Fehler markieren",
+  "rate.markedError": "Als Fehler markiert",
+
+  "menu.recent": "Zuletzt verwendet",
+  "menu.selection": "Auswahl",
+  "menu.commands": "Befehle",
+  "menu.back": "Zurück",
+
+  "selection.pickInView": "Elemente in der Ansicht auswählen",
+  "selection.pickPrompt": "Elemente auswählen, dann auf Fertig stellen klicken",
+  "selection.instanceParams": "Exemplarparameter",
+  "selection.typeParams": "Typparameter",
+  "selection.instanceParam": "Exemplarparameter",
+  "selection.typeParam": "Typparameter",
+  "selection.noType": "Kein Typ",
+  "selection.noCategory": "Keine Kategorie",
+
+  "ribbon.panel": "Werkzeuge",
+  "ribbon.openChat": "KI-Chat\nöffnen",
+  "ribbon.openChat.tooltip": "KI-Steuerungsbereich öffnen"
+}

@@ -1,0 +1,49 @@
+{
+  "nav.brand.tooltip": "BIM Wave : intelligence contextuelle. Exécution dans Revit.",
+  "nav.free": "BIM Wave Free",
+  "nav.python": "Scripts Python",
+  "nav.python.tooltip": "Votre bibliothèque de scripts pyRevit",
+  "nav.patternLab": "Pattern Lab",
+  "nav.patternLab.tooltip": "Entraîner et ajuster les modèles d’IA",
+
+  "chat.greetings": [
+    "Bonjour ! Je suis Livvy, votre assistante IA BimWave. Sur quoi travaillons-nous aujourd’hui ?",
+    "Bon retour ! Ici Livvy : comment puis-je vous aider dans Revit ?",
+    "Salut, je suis Livvy. Décrivez votre tâche, je m’occupe du reste dans Revit."
+  ],
+  "chat.listening": "À l’écoute des commandes...",
+  "chat.thinking": "Élaboration de la logique...",
+  "chat.cancel": "Annuler",
+  "chat.cancelled": "Annulé par l’utilisateur",
+
+  "input.placeholder": "Décrivez la séquence... [Entrée pour envoyer]",
+  "input.voice": "Saisie vocale",
+  "input.send": "Envoyer",
+
+  "footer.settings": "Afficher les paramètres d’environnement",
+  "footer.aiCore": "Moteur IA :",
+  "footer.aiModel": "Modèle IA :",
+
+  "rate.markSolution": "Marquer comme solution",
+  "rate.markedSolution": "Marqué comme solution",
+  "rate.markError": "Marquer comme erreur",
+  "rate.markedError": "Marqué comme erreur",
+
+  "menu.recent": "Récents",
+  "menu.selection": "Sélection",
+  "menu.commands": "Commandes",
+  "menu.back": "Retour",
+
+  "selection.pickInView": "Sélectionner des éléments dans la vue",
+  "selection.pickPrompt": "Sélectionnez des éléments, puis cliquez sur Terminer",
+  "selection.instanceParams": "Paramètres d’occurrence",
+  "selection.typeParams": "Paramètres de type",
+  "selection.instanceParam": "Paramètre d’occurrence",
+  "selection.typeParam": "Paramètre de type",
+  "selection.noType": "Aucun type",
+  "selection.noCategory": "Aucune catégorie",
+
+  "ribbon.panel": "Outils",
+  "ribbon.openChat": "Ouvrir le\nchat IA",
+  "ribbon.openChat.tooltip": "Ouvrir le panneau de contrôle IA"
+}

@@ -1,0 +1,49 @@
+{
+  "nav.brand.tooltip": "BIM Wave: Contextual intelligence. Revit execution.",
+  "nav.free": "BIM Wave Free",
+  "nav.python": "Python scripts",
+  "nav.python.tooltip": "Your pyRevit Scripts Library",
+  "nav.patternLab": "Pattern Lab",
+  "nav.patternLab.tooltip": "Train & Tune AI Patterns",
+
+  "chat.greetings": [
+    "Hey! I’m Livvy, your BimWave AI assistant. What are we working on today?",
+    "Welcome back! Livvy here — what can I help you with in Revit?",
+    "Hi, I’m Livvy. Describe your task and I’ll handle the rest in Revit."
+  ],
+  "chat.listening": "Listening for commands...",
+  "chat.thinking": "Synthesizing logic...",
+  "chat.cancel": "Cancel",
+  "chat.cancelled": "Cancelled by user",
+
+  "input.placeholder": "Describe sequence... [Enter to send]",
+  "input.voice": "Voice input",
+  "input.send": "Send",
+
+  "footer.settings": "Expand environment settings",
+  "footer.aiCore": "AI core:",
+  "footer.aiModel": "AI model:",
+
+  "rate.markSolution": "Mark as solution",
+  "rate.markedSolution": "Marked as solution",
+  "rate.markError": "Mark as error",
+  "rate.markedError": "Marked as error",
+
+  "menu.recent": "Recent",
+  "menu.selection": "Selection",
+  "menu.commands": "Commands",
+  "menu.back": "Back",
+
+  "selection.pickInView": "Pick elements in view",
+  "selection.pickPrompt": "Pick elements, then click Finish",
+  "selection.instanceParams": "Instance parameters",
+  "selection.typeParams": "Type parameters",
+  "selection.instanceParam": "Instance parameter",
+  "selection.typeParam": "Type parameter",
+  "selection.noType": "No type",
+  "selection.noCategory": "No category",
+
+  "ribbon.panel": "Tools",
+  "ribbon.openChat": "Open AI\nChat",
+  "ribbon.openChat.tooltip": "Open the AI control panel"
+}
