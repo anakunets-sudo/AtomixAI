@@ -16,9 +16,9 @@
   "chat.cancel": "Abbrechen",
   "chat.cancelled": "Vom Benutzer abgebrochen",
 
-  "input.placeholder": "Ablauf beschreiben... [Enter zum Senden]",
+  "input.placeholder": "Mit Livvy chatten, '#' für Menü",
   "input.voice": "Spracheingabe",
-  "input.send": "Senden",
+  "input.send": "Senden [Enter]",
 
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",

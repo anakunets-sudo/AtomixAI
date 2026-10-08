@@ -22,7 +22,7 @@ namespace AtomixAI.UI.Commands
                     new
                     {
                         id = "tags",
-                        name = MenuResponse.Label("🏷️", Localizer.T("menu.tags")),
+                        name = MenuResponse.Label("", Localizer.T("menu.tags")),
                         hasChildren = true
                     }
                 });

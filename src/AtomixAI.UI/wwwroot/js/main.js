@@ -13,8 +13,13 @@ let cancelledTurn = 0;
 // Одна строка при пустом поле и при тексте. 42px после отправки поднимало блок:
 // плейсхолдер оказывался над кнопками, а набранный текст — в один ряд с ними.
 function resizeInputField() {
+    const isEmpty = inputField.textContent.trim() === '';
     inputField.style.height = 'auto';
     const lineHeight = parseFloat(getComputedStyle(inputField).lineHeight) || 0;
+    if (isEmpty) {
+        inputField.style.height = Math.ceil(lineHeight) + 'px';
+        return;
+    }
     const next = Math.min(Math.max(inputField.scrollHeight, lineHeight), 150);
     inputField.style.height = next + 'px';
 }
@@ -176,7 +181,9 @@ const messageSanitizeConfig = {
         'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5',
         'h6', 'hr', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span'
     ],
-    ALLOWED_ATTR: ['href', 'title', 'class'],
+    // Атрибуты чипов должны переживать санитайзер, иначе в чате они теряют
+    // тултип и BIM-паспорт (data-json) и перестают быть «неизменными».
+    ADD_ATTR: ['data-json', 'data-tooltip'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     SAFE_FOR_TEMPLATES: true
@@ -202,7 +209,7 @@ function decorateAliases(container) {
 
     while (walker.nextNode()) {
         const parent = walker.currentNode.parentElement;
-        if (!parent || parent.closest('code, pre, a, .alias-btn')) continue;
+        if (!parent || parent.closest('code, pre, a, .alias-btn, .bim-chip')) continue;
         textNodes.push(walker.currentNode);
     }
 

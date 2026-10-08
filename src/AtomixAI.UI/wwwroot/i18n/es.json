@@ -16,9 +16,9 @@
   "chat.cancel": "Cancelar",
   "chat.cancelled": "Cancelado por el usuario",
 
-  "input.placeholder": "Describe la secuencia... [Enter para enviar]",
+  "input.placeholder": "Chatear con Livvy, '#' para menú",
   "input.voice": "Entrada de voz",
-  "input.send": "Enviar",
+  "input.send": "Enviar [Enter]",
 
   "footer.settings": "Expandir la configuración del entorno",
   "footer.aiCore": "Núcleo de IA:",

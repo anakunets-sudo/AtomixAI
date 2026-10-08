@@ -10,10 +10,11 @@ window.Atomix.ChipsController = {
         // всегда идёт по одному сценарию.
         const aliasElement = document.createElement('span');
         aliasElement.className = 'alias-btn';
+        aliasElement.contentEditable = 'false';
         aliasElement.dataset.alias = alias;
         aliasElement.textContent = alias;
 
-        this._insertTag(aliasElement, ' ');
+        this._insertTag(aliasElement, '\u00A0');
     },
 
     // Вставляет тег на место каретки (или в конец поля) и гарантирует, что СНАРУЖИ

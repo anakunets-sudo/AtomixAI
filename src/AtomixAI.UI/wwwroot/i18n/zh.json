@@ -16,9 +16,9 @@
   "chat.cancel": "取消",
   "chat.cancelled": "已被用户取消",
 
-  "input.placeholder": "描述操作步骤... [按 Enter 发送]",
+  "input.placeholder": "与 Livvy 对话，输入 '#' 打开菜单",
   "input.voice": "语音输入",
-  "input.send": "发送",
+  "input.send": "发送 [Enter]",
 
   "footer.settings": "展开环境设置",
   "footer.aiCore": "AI 核心：",

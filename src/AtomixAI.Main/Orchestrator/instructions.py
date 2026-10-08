@@ -249,7 +249,7 @@ FEW_SHOT_EXAMPLES = [
     # Refinement payload: all filter_parameters fields known → empty lock, execute
     {
         "role": "user",
-        "content": "- ORIGINAL_MESSAGE: \"find\"\n- REFINEMENT_MESSAGE_1: \"walls with parameter equal to \\\"Garage\\\"\"\n- REFINEMENT_MESSAGE_2: \"mark\""
+        "content": "- ORIGINAL_MESSAGE: \"find\"\n- REFINEMENT_MESSAGE_1: \"walls with parameter equal to Garage\"\n- REFINEMENT_MESSAGE_2: \"mark\""
     },
     {
         "role": "assistant",
@@ -259,7 +259,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"REFINEMENT_MESSAGE_2 explicitly stated: mark → ParameterName Mark. Operator == is specified. The parameter value \\\"Garage\\\" is specified, and I use it as-is because I never translate user-provided parameter values. The sequence is complete, 'active_context_tag' is empty. Mark is used only because the user gave it that name.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"Value\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
+                "arguments": "{\"thought\": \"REFINEMENT_MESSAGE_2 explicitly stated: mark → ParameterName Mark. Operator == is specified. The parameter value 'Garage' is specified, and I use it as-is because I never translate user-provided parameter values. The sequence is complete, 'active_context_tag' is empty. Mark is used only because the user gave it that name.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"Value\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
             }
         }]
     },
@@ -273,7 +273,7 @@ FEW_SHOT_EXAMPLES = [
     # Value/prefix given but parameter NOT named → ask ParameterName, do NOT default to Mark
     {
         "role": "user",
-        "content": "- ORIGINAL_MESSAGE: \"find\"\n- REFINEMENT_MESSAGE_1: \"walls that start with the letter \\\"G\\\"\""
+        "content": "- ORIGINAL_MESSAGE: \"find\"\n- REFINEMENT_MESSAGE_1: \"walls that start with the letter G\""
     },
     {
         "role": "assistant",
@@ -283,7 +283,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to select walls whose value for a text parameter starts with the letter \\\"G\\\". I never translate parameter values. The user did not specify the parameter name (neither Mark nor Name). Guessing that it is Mark is forbidden. Halt execution and ask for the parameter name (ParameterName).\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter name (ParameterName) should I use?\"}"
+                "arguments": "{\"thought\": \"The user wants to select walls whose value for a text parameter starts with the letter 'G'. I never translate parameter values. The user did not specify the parameter name (neither Mark nor Name). Guessing that it is Mark is forbidden. Halt execution and ask for the parameter name (ParameterName).\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter name (ParameterName) should I use?\"}"
             }
         }]
     },

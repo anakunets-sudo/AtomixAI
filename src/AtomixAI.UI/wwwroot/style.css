@@ -60,6 +60,7 @@ body {
     padding: 5px 10px;
     background: var(--panel);
     color: var(--text);
+    font-family: "Segoe UI Symbol", "Segoe UI", Arial, sans-serif;
     font-size: 11px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -264,6 +265,10 @@ textarea,
         content: attr(placeholder);
         color: #888;
         pointer-events: none;
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
 textarea,
@@ -297,7 +302,7 @@ opacity: .8;
     display: none;
 }
 #ai-menu {
-    --menu-gutter: 8px;
+    --menu-gutter: 4px;
     border: 1px solid var(--border);
     margin: 10px 6px -14px 6px;
     padding: 0 var(--menu-gutter) 18px var(--menu-gutter);
@@ -416,12 +421,13 @@ opacity: .8;
     font-style: italic;
     font-size: 13px;
 }
-
+/*
 .menu-item.selected {
     background: var(--border);
     color: var(--text);
     border-radius: 6px;
 }
+*/
 .menu-item:hover {
     background: var(--border);
     border-radius: 6px;
@@ -438,13 +444,12 @@ opacity: .8;
 .menu-item.is-collapsible-group,
 .menu-item.is-collapsible-group:hover,
 .menu-item.is-collapsible-group.selected {
-    min-height: 32px;
-    border: 1px solid var(--border);
     border-radius: 6px;
-    background: var(--panel);
+    background: var(--border);
     color: var(--text);
     cursor: pointer;
-    font-weight: 600;
+    padding: 0 6px;
+    min-height: 28px;
 }
 .menu-item.is-collapsible-group:hover {
     border-color: var(--accent);
@@ -457,11 +462,12 @@ opacity: .8;
     font-size: 12px;
     color: var(--menu-arrow);
 }
+/*
 .menu-item.is-group-child {
-    margin-left: 12px;
-    width: calc(100% - 12px);
+    margin-left: 0;
+    width: 0;
 }
-/*.menu-item.selected:hover {
+.menu-item.selected:hover {
     background: rgba(var(--bg), 0.3);
 }*/
 
@@ -694,10 +700,8 @@ opacity: .8;
 .bim-chip {
     background: var(--accent);
     color: var(--accent);
-    padding: 0px 4px 2px 2px;
+    padding: 0px 6px 2px 6px;
     border-radius: 4px;
-    font-size: 14.5px;
-    font-weight: 400;
     margin: 0 4px;
     cursor: pointer;
     border: 1px solid var(--accent);

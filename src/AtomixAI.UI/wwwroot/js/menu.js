@@ -223,7 +223,7 @@ window.Atomix.MenuController = {
             return;
         }
         const isHeaderSelected = this.selectedIndex === -1 ? 'selected' : '';
-        this.backHost.innerHTML = `<div class="menu-back-row ${isHeaderSelected}" id="menu-header-back" title="${this.currentTitle}"><span class="menu-back">&#xE76B;</span><span class="menu-label">${window.Atomix.t('menu.back', 'Back')}</span><span class="menu-kbd">Esc</span></div>`;
+        this.backHost.innerHTML = `<div class="menu-back-row ${isHeaderSelected}" id="menu-header-back"><span class="menu-back">&#xE76B;</span><span class="menu-label">${window.Atomix.t('menu.back', 'Back')}</span><span class="menu-kbd">Esc</span></div>`;
         const header = document.getElementById('menu-header-back');
         if (header) {
             header.addEventListener('mousedown', (e) => {
