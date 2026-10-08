@@ -31,7 +31,7 @@ namespace AtomixAI.Bridge
             _pyLoader = new PyRevitLoader(scriptsPath);
 
             // Сканируем сборку на наличие команд IAtomicCommand
-            _csCommands = Assembly.GetAssembly(typeof(AtomicSearchFactory))
+            _csCommands = typeof(TypeRegistry).Assembly
                 .GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
                 .ToDictionary(
