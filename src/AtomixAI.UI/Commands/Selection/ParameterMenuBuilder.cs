@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Autodesk.Revit.DB;
 using AtomixAI.Core;
 
@@ -11,25 +10,33 @@ namespace AtomixAI.UI.Commands.Selection
     {
         public static List<object> Build(Element paramHolder, bool isType, Element originalElement)
         {
-            var items = new List<(string Name, object Item)>();
+            var items = new List<object>();
 
             string elId = originalElement.Id.GetIdValue().ToString();
             string elCategory = originalElement.Category?.Name ?? Localizer.T("selection.noCategory");
             string elName = originalElement.Name;
             string paramBinding = Localizer.T(isType ? "selection.typeParam" : "selection.instanceParam");
 
-            foreach (Parameter p in paramHolder.Parameters)
+            // GetOrderedParameters — только параметры Properties palette (видимые юзеру в Revit UI)
+            foreach (Parameter p in paramHolder.GetOrderedParameters())
             {
-                if (!p.HasValue) continue;
-
                 string? name = p.Definition?.Name;
                 if (string.IsNullOrEmpty(name)) continue;
 
-                string val = p.StorageType == StorageType.String ? p.AsString() : p.AsValueString();
-                if (string.IsNullOrEmpty(val)) val = p.AsDouble().ToString();
+                if (p.Definition is InternalDefinition internalDef && !internalDef.Visible)
+                    continue;
 
-                string label = $"{name}: {val}";
-                items.Add((label, new
+                string val = "";
+                if (p.HasValue)
+                {
+                    val = p.StorageType == StorageType.String ? p.AsString() : p.AsValueString();
+                    if (string.IsNullOrEmpty(val) && p.StorageType == StorageType.Double)
+                        val = p.AsDouble().ToString();
+                    val ??= "";
+                }
+
+                string label = string.IsNullOrEmpty(val) ? name : $"{name}: {val}";
+                items.Add(new
                 {
                     id = $"param_{Guid.NewGuid()}",
                     name = label,
@@ -43,10 +50,10 @@ namespace AtomixAI.UI.Commands.Selection
                         elementName = elName,
                         category = elCategory
                     }
-                }));
+                });
             }
 
-            return items.OrderBy(i => i.Name).Select(i => i.Item).ToList();
+            return items;
         }
     }
 }

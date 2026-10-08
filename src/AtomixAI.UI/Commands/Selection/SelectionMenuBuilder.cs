@@ -52,7 +52,7 @@ namespace AtomixAI.UI.Commands.Selection
                 items.Add(new
                 {
                     id = "grp_" + categoryName,
-                    name = WebUtility.HtmlEncode($"{categoryName} ({elements.Count})"),
+                    name = WebUtility.HtmlEncode($"< {categoryName} ({elements.Count}) >"),
                     isGroup = true,
                     hasChildren = false
                 });
@@ -63,7 +63,7 @@ namespace AtomixAI.UI.Commands.Selection
                     items.Add(new
                     {
                         id = SelectionMenuIds.Element(el.Id),
-                        name = MenuResponse.Label("📦", $"{elementName} [{el.Id.GetIdValue()}]"),
+                        name = WebUtility.HtmlEncode($"{elementName} [{el.Id.GetIdValue()}]"),
                         hasChildren = true,
                         groupKey = categoryName
                     });

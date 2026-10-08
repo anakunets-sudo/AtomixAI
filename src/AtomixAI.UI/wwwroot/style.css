@@ -432,7 +432,7 @@ opacity: .8;
     background: transparent;
     cursor: default;
     font-size: 14px;
-    color: var(--text);
+    color: var(--accent);
     min-height: 24px;
 }
 /*.menu-item.selected:hover {

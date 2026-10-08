@@ -26,7 +26,7 @@ window.Atomix.MenuController = {
             // Не сбрасываем minHeight здесь, чтобы не было прыжка при очистке списка
         }
         if (title) this.currentTitle = title;
-        this.items = (newItems && newItems.length) ? newItems : this._getDefaultItems();
+        this.items = Array.isArray(newItems) ? newItems : this._getDefaultItems();
         this._resetSearch();
         // На верхнем уровне ничего не выделено (-1), в подменю — первый кликабельный пункт
         if (!isBackAction) {

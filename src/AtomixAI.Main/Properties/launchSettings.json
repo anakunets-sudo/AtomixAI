@@ -1,9 +1,9 @@
 {
         "profiles": {
-        "Revit 2026": {
+        "Revit 2027": {
         "commandName": "Executable",
-        "executablePath": "C:\\Program Files\\Autodesk\\Revit 2026\\Revit.exe",
-        "workingDirectory": "C:\\Program Files\\Autodesk\\Revit 2026\\"
+        "executablePath": "C:\\Program Files\\Autodesk\\Revit 2027\\Revit.exe",
+        "workingDirectory": "C:\\Program Files\\Autodesk\\Revit 2027\\"
         }
         }
         }

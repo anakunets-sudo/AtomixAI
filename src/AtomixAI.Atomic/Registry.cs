@@ -25,7 +25,7 @@ using System.Text.RegularExpressions;
         {
             var tools = new List<object>();
 
-            var commandTypes = Assembly.GetAssembly(typeof(AtomicSearchFactory))
+            var commandTypes = typeof(Registry).Assembly
                 .GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract);
 
@@ -180,7 +180,7 @@ using System.Text.RegularExpressions;
 
             sb.Append("<BIM_TOOLS>\n");
 
-            var commandTypes = Assembly.GetAssembly(typeof(AtomicSearchFactory)).GetTypes()
+            var commandTypes = typeof(Registry).Assembly.GetTypes()
                 .Where(t => typeof(IAtomicCommand).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract)
                 .Select(t => new { Type = t, Info = t.GetCustomAttribute<AiInfoAttribute>() })
                 .Where(x => x.Info != null)

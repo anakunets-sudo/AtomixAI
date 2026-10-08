@@ -1,4 +1,5 @@
 #orchestrator.py
+import argparse
 import os
 from socket import AI_NUMERICHOST
 import sys
@@ -45,7 +46,25 @@ MODEL_NAME = 'google/gemini-2.5-flash-lite'
 #'openai/gpt-5-nano' 
 #'google/gemini-2.5-flash-lite'
 #'deepseek/deepseek-v4-flash-0731' 
-API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+
+def resolve_api_key():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--api-key", dest="api_key", default=None)
+    args, _ = parser.parse_known_args()
+
+    if args.api_key and args.api_key.strip():
+        return args.api_key.strip()
+
+    env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    return ""
+
+
+API_KEY = resolve_api_key()
+if not API_KEY:
+    log("[!] OPENROUTER_API_KEY is empty — OpenRouter calls will return 401. Pass --api-key to the orchestrator or set OPENROUTER_API_KEY in the environment before launch.")
 FULL_URL = 'https://openrouter.ai/api/v1/chat/completions'
 PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
 PROVIDER_FLEX = {
@@ -83,13 +102,14 @@ bim_sequence_tool = {
                 #    "type": "string",
                 #    "description": "You MUST detect the language of the <USER_REQUEST_PAYLOAD>. Must be a single word (e.g., 'German')."
                 #},
-                "active_context_tag": {
-                    "type": "string",
-                    "description": "MANDATORY: Analyze each message in <USER_REQUEST_PAYLOAD>. Exclude messages that constitute spam. If the user request is missing any mandatory parameter for a tool, populate this field using the strict format 'ToolName:ParameterName' (e.g., 'filter_elements:Categories' or 'create_wall:Length'). Return an EMPTY string \"\" if all tools are fully ready for operation and no clarifications are required."
-                },
                 "sequence": {
                     "type": "array",
-                    "description": "Sequential array of BIM commands to execute in Revit. Predict and build the full pipeline layout immediately, even if some required arguments are currently missing and empty!",
+                    "description": (
+                        "Write this BEFORE 'active_context_tag'. Sequential BIM commands for Revit. "
+                        "Fill every known Params value from the FULL <USER_REQUEST_PAYLOAD> (ORIGINAL + all REFINEMENT messages). "
+                        "If a mandatory value is still unknown after reading the payload, leave sequence EMPTY [] and ask via active_context_tag. "
+                        "NEVER put a filled Params value into sequence and then claim that same parameter is missing."
+                    ),
                     "items": {
                         "type": "object",
                         "properties": {
@@ -107,10 +127,21 @@ bim_sequence_tool = {
                         "required": ["name", "arguments"]
                     }
                 },
+                "active_context_tag": {
+                    "type": "string",
+                    "description": (
+                        "Write this AFTER 'sequence'. Focus lock for ONE still-missing mandatory parameter. "
+                        "Format: 'ToolName:ParameterName' (e.g. 'search_init:Scope', 'filter_parameters:ParameterName', 'create_wall:Length'). "
+                        "CRITICAL SELF-CHECK: Inspect the sequence you just wrote. If ToolName.Params.ParameterName (or arguments.ParameterName) "
+                        "already has a non-empty value, you MUST return \"\" — do NOT invent a lock for a filled field. "
+                        "Return \"\" when the sequence is ready to execute, or for small talk. "
+                        "Only set a non-empty tag when sequence is [] OR that exact parameter is still empty/absent."
+                    )
+                },
                 "user_facing_message": {
                     "type": "string",
                     "description": (
-                        "Write this AFTER 'sequence'. Message shown to the engineer in the UI. Keep it scannable (1-2 short sentences). "
+                        "Write this AFTER 'active_context_tag'. Message shown to the engineer in the UI. Keep it scannable (1-2 short sentences). "
                         "If 'active_context_tag' is populated: a warm, direct question asking for the missing parameter. "
                         "If 'sequence' is complete and will execute now: a short preview of THAT sequence — "
                         "name the tools and key arguments in plain language. Use future / about-to-start tense. "
@@ -119,7 +150,7 @@ bim_sequence_tool = {
                     )
                 }
             },
-            "required": ["thought", "active_context_tag", "sequence", "user_facing_message"] 
+            "required": ["thought", "sequence", "active_context_tag", "user_facing_message"] 
         }
     }
 }
@@ -265,6 +296,38 @@ class ContextStateManager:
 session_state = ContextStateManager()
 
 dynamic_manual = None
+
+def _sequence_has_context_param(sequence, context_tag):
+    """True if active_context_tag like 'filter_parameters:Value' is already filled in sequence."""
+    if not sequence or not context_tag or ":" not in str(context_tag):
+        return False
+    tool_name, param_name = str(context_tag).split(":", 1)
+    tool_name, param_name = tool_name.strip(), param_name.strip()
+    if not tool_name or not param_name:
+        return False
+    for step in sequence:
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("name", "")).strip() != tool_name:
+            continue
+        args = step.get("arguments") or {}
+        if not isinstance(args, dict):
+            continue
+        # Params может лежать в arguments.Params или плоско в arguments
+        candidates = []
+        params = args.get("Params")
+        if isinstance(params, dict):
+            candidates.append(params.get(param_name))
+        candidates.append(args.get(param_name))
+        for val in candidates:
+            if val is None:
+                continue
+            if isinstance(val, str) and not val.strip():
+                continue
+            if isinstance(val, (list, dict)) and len(val) == 0:
+                continue
+            return True
+    return False
 
 def execute_eviction_protocol(user_text, detected_lang, headers):
     eviction_rules = (
@@ -511,6 +574,13 @@ def process_ai_logic(user_text, client, generation=0):
         log(f">>> [LOGIC] Machine parameter from AI: '{ai_active_context_tool}'")
         log(f">>> [LOGIC] Sequence: {ai_sequence}")
         log(f">>> [LANG] User language: {detected_lang}")
+
+        # Модель иногда ставит active_context_tag, хотя параметр уже есть в sequence
+        # (как filter_parameters:Value при Value="Гараж"). Тогда не блокируем исполнение.
+        if ai_active_context_tool not in [None, ""] and ai_sequence and _sequence_has_context_param(ai_sequence, ai_active_context_tool):
+            log(f"[*] Ignoring stale active_context_tag '{ai_active_context_tool}' — value already present in sequence.")
+            ai_active_context_tool = ""
+            session_state.clear()
 
         # ВАРИАНТ 1: ИИ подтверждает, что параметров не хватает (удерживаем или создаем замок)
         if ai_active_context_tool not in [None,""]:

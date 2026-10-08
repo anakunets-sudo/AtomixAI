@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Net;
 using Autodesk.Revit.UI;
 using AtomixAI.Core;
 using AtomixAI.UI.Infrastructure;
@@ -17,8 +18,8 @@ namespace AtomixAI.UI.Commands.Selection
 
             var items = new List<object>
             {
-                new { id = SelectionMenuIds.Instance(rawId), name = MenuResponse.Label("🔹", Localizer.T("selection.instanceParams")), hasChildren = true },
-                new { id = SelectionMenuIds.Type(rawId), name = MenuResponse.Label("🔸", Localizer.T("selection.typeParams")), hasChildren = true }
+                new { id = SelectionMenuIds.Instance(rawId), name = WebUtility.HtmlEncode(Localizer.T("selection.instanceParams")), hasChildren = true },
+                new { id = SelectionMenuIds.Type(rawId), name = WebUtility.HtmlEncode(Localizer.T("selection.typeParams")), hasChildren = true }
             };
             return MenuResponse.Items(items);
         }

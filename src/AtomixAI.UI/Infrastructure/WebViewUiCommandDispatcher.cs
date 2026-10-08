@@ -14,6 +14,7 @@ namespace AtomixAI.UI.Infrastructure
         // Каждый пункт меню (#) — отдельный класс. Новый пункт = новый класс + строка здесь.
         private static readonly List<IMenuItemUiCommand> _menuItemCommands = new List<IMenuItemUiCommand>
         {
+            new RecentTagsMenuUiCmd(),
             new SelectionMenuUiCmd(),
             new PickElementsInViewUiCmd(),
             new ElementParametersBranchUiCmd(),

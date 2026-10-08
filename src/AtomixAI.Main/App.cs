@@ -19,6 +19,9 @@ namespace AtomixAI.Main
         public static readonly DockablePaneId PaneId = AtomixDockablePane.ID;
         private System.Diagnostics.Process _pyProcess;
         private System.Diagnostics.Process _vocalSyncProcess;
+        private CancellationTokenSource? _vocalSyncCts;
+        private NamedPipeServerStream? _vocalPipe;
+        private readonly object _vocalPipeGate = new object();
 
         // НАШИ НОВЫЕ ПОЛЯ ДЛЯ ИЗОЛИРОВАННОГО UI
         private AtomixAI.UI.Infrastructure.UiExternalEventHandler _uiHandler;
@@ -148,6 +151,7 @@ namespace AtomixAI.Main
         public Result OnShutdown(UIControlledApplication application)
         {
             _mcpHost?.Stop();
+            StopVocalSyncServer();
             try
             {
                 if (_pyProcess != null && !_pyProcess.HasExited) _pyProcess.Kill();
@@ -208,6 +212,21 @@ namespace AtomixAI.Main
                 startInfo.EnvironmentVariables["PYTHONPATH"] = Path.Combine(assemblyDir, "PythonRuntime");
                 // ЖЕСТКИЙ ХАК ДЛЯ PYTHON 3.7+: Включаем глобальный режим UTF-8 на уровне процесса Windows
                 startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
+                // API key управляется непосредственно в Python-оркестраторе.
+                // Здесь он только передаётся как аргумент запуска, если найден в окружении пользователя/машины.
+                string openRouterKey =
+                    Environment.GetEnvironmentVariable("OPENROUTER_API_KEY", EnvironmentVariableTarget.User)
+                    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY", EnvironmentVariableTarget.Machine);
+                if (!string.IsNullOrWhiteSpace(openRouterKey))
+                {
+                    string safeKey = openRouterKey.Replace("\"", "\\\"");
+                    startInfo.Arguments = $"\"{scriptPath}\" --api-key \"{safeKey}\"";
+                }
+                else
+                {
+                    startInfo.Arguments = $"\"{scriptPath}\"";
+                    System.Diagnostics.Debug.WriteLine("[AtomixAI] OPENROUTER_API_KEY is not set in User/Machine environment; orchestrator will read it from its own config/env fallback.");
+                }
                 _pyProcess = new System.Diagnostics.Process { StartInfo = startInfo };
                 _pyProcess.Start();
                 ProcessJobTracker.AddProcess(_pyProcess);
@@ -248,41 +267,130 @@ namespace AtomixAI.Main
         }
         private void StartVocalSyncServer(AtomixDockablePane pane)
         {
+            _vocalSyncCts = new CancellationTokenSource();
+            var token = _vocalSyncCts.Token;
+
             Task.Run(async () =>
             {
-                while (true) // Цикл для переподключения после закрытия Pipe клиентом
+                // Переподключение после закрытия pipe клиентом. Выход — по отмене в OnShutdown.
+                while (!token.IsCancellationRequested)
                 {
+                    NamedPipeServerStream? pipeServer = null;
                     try
                     {
-                        using (var pipeServer = new NamedPipeServerStream("AtomixAI_Vocal_Pipe", PipeDirection.In))
+                        // Asynchronous: иначе WaitForConnectionAsync(token) не снимается при отмене.
+                        pipeServer = new NamedPipeServerStream(
+                            "AtomixAI_Vocal_Pipe",
+                            PipeDirection.In,
+                            1,
+                            PipeTransmissionMode.Byte,
+                            PipeOptions.Asynchronous);
+
+                        lock (_vocalPipeGate)
                         {
-                            await pipeServer.WaitForConnectionAsync();
-                            using (var reader = new StreamReader(pipeServer))
+                            if (token.IsCancellationRequested)
+                                break;
+                            _vocalPipe = pipeServer;
+                        }
+
+                        await pipeServer.WaitForConnectionAsync(token);
+                        if (token.IsCancellationRequested)
+                            break;
+
+                        using (var reader = new StreamReader(pipeServer))
+                        {
+                            while (!token.IsCancellationRequested && !reader.EndOfStream)
                             {
-                                while (!reader.EndOfStream)
+                                var text = await reader.ReadLineAsync();
+                                if (text == null)
+                                    break;
+                                if (text.Length == 0)
+                                    continue;
+
+                                var json = Newtonsoft.Json.JsonConvert.SerializeObject(new
                                 {
-                                    var text = await reader.ReadLineAsync();
-                                    if (!string.IsNullOrEmpty(text))
-                                    {
-                                        var json = Newtonsoft.Json.JsonConvert.SerializeObject(new
-                                        {
-                                            type = "voice_input",
-                                            content = text
-                                        });
-                                        pane.Dispatcher.Invoke(() =>
-                                        {
-                                            pane.WebView?.CoreWebView2?.PostWebMessageAsJson(json);
-                                        });
-                                    }
-                                }
+                                    type = "voice_input",
+                                    content = text
+                                });
+                                pane.Dispatcher.Invoke(() =>
+                                {
+                                    pane.WebView?.CoreWebView2?.PostWebMessageAsJson(json);
+                                });
                             }
                         }
                     }
-                    catch
-                    { /* Ошибка подключения, пробуем снова */
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (token.IsCancellationRequested)
+                            break;
+
+                        Debug.WriteLine($"[VocalSyncPipe]: {ex.Message}");
+                        try
+                        {
+                            // Без паузы сбой создания pipe крутит цикл и занимает ядро.
+                            await Task.Delay(500, token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                    finally
+                    {
+                        if (pipeServer != null)
+                        {
+                            lock (_vocalPipeGate)
+                            {
+                                if (ReferenceEquals(_vocalPipe, pipeServer))
+                                    _vocalPipe = null;
+                            }
+
+                            try
+                            {
+                                if (pipeServer.IsConnected)
+                                    pipeServer.Disconnect();
+                                pipeServer.Dispose();
+                            }
+                            catch
+                            {
+                            }
+                        }
                     }
                 }
             });
+        }
+
+        private void StopVocalSyncServer()
+        {
+            CancellationTokenSource? cts;
+            NamedPipeServerStream? pipe;
+            lock (_vocalPipeGate)
+            {
+                cts = _vocalSyncCts;
+                pipe = _vocalPipe;
+                _vocalPipe = null;
+            }
+
+            try
+            {
+                cts?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            // Dispose снимает и WaitForConnectionAsync, и ReadLineAsync, если отмена токена их не будит.
+            try
+            {
+                pipe?.Dispose();
+            }
+            catch
+            {
+            }
         }
     }
 }
