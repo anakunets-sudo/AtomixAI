@@ -16,6 +16,7 @@ window.Atomix.MenuController = {
     currentTitle: 'BIM Context',
     initialHeight: 0,
     searchQuery: '',
+    collapsedGroups: {},
     _searchBound: false,
     update(newItems, isBackAction = false, title = null) {
         // Если мы вернулись на главный уровень (Level 0), можно сбросить min-height
@@ -27,6 +28,9 @@ window.Atomix.MenuController = {
         }
         if (title) this.currentTitle = title;
         this.items = Array.isArray(newItems) ? newItems : this._getDefaultItems();
+        if (this.items.some(item => this._isCollapsibleGroup(item))) {
+            this.collapsedGroups = {};
+        }
         this._resetSearch();
         // На верхнем уровне ничего не выделено (-1), в подменю — первый кликабельный пункт
         if (!isBackAction) {
@@ -59,21 +63,33 @@ window.Atomix.MenuController = {
     _isGroup(item) {
         return !!(item && item.isGroup);
     },
+    _isCollapsibleGroup(item) {
+        return !!(item && item.isCollapsibleGroup);
+    },
     _nameMatches(item, q) {
         return this._plainName(item && item.name).toLowerCase().includes(q);
     },
     _firstSelectableIndex(list) {
         const items = list || [];
         for (let i = 0; i < items.length; i++) {
-            if (!this._isGroup(items[i])) return i;
+            if (!this._isGroup(items[i]) || this._isCollapsibleGroup(items[i])) return i;
         }
         return -1;
     },
+    _toggleCollapsibleGroup(group) {
+        const currentView = this._viewItems();
+        const selectedItem = currentView[this.selectedIndex];
+        this.collapsedGroups[group.id] = !this.collapsedGroups[group.id];
+
+        const nextView = this._viewItems();
+        const selectedIndex = nextView.indexOf(selectedItem);
+        this.selectedIndex = selectedIndex >= 0 ? selectedIndex : nextView.indexOf(group);
+        this._renderItems();
+    },
     _viewItems() {
         const q = (this.searchQuery || '').trim().toLowerCase();
-        if (!q) return this.items;
         if (!this.items.some(item => this._isGroup(item))) {
-            return this.items.filter(item => this._nameMatches(item, q));
+            return q ? this.items.filter(item => this._nameMatches(item, q)) : this.items;
         }
         const result = [];
         let i = 0;
@@ -90,13 +106,14 @@ window.Atomix.MenuController = {
                 const matched = groupMatch
                     ? children
                     : children.filter(child => this._nameMatches(child, q));
-                if (groupMatch || matched.length) {
+                const isCollapsed = this._isCollapsibleGroup(item) && this.collapsedGroups[item.id];
+                if (!q || groupMatch || matched.length) {
                     result.push(item);
-                    result.push(...matched);
+                    if (q || !isCollapsed) result.push(...(q ? matched : children));
                 }
                 i = j;
             } else {
-                if (this._nameMatches(item, q)) result.push(item);
+                if (!q || this._nameMatches(item, q)) result.push(item);
                 i++;
             }
         }
@@ -124,10 +141,15 @@ window.Atomix.MenuController = {
     drillDown() {
         if (this.selectedIndex === -1) {
             this.goBack();
-            return;
+            return false;
         }
         const item = this._viewItems()[this.selectedIndex];
-        if (!item || this.loadingIndex !== -1 || this._isGroup(item)) return;
+        if (!item || this.loadingIndex !== -1) return false;
+        if (this._isCollapsibleGroup(item)) {
+            this._toggleCollapsibleGroup(item);
+            return false;
+        }
+        if (this._isGroup(item)) return false;
 
         if (item.hasChildren) {
             const fullIndex = this.items.indexOf(item);
@@ -141,13 +163,21 @@ window.Atomix.MenuController = {
             this._renderItems();
 
             window.Atomix.RevitBridge.send('GET_SUB_CONTEXT', { id: item.id });
-        } else {
-            // МОДИФИКАЦИЯ: Если это конечный параметр — прячем меню и генерируем чипс
-            if (item.meta) {
-                window.Atomix.ChipsController.create(item);
-            }
-            this.hide();
+            return false;
         }
+
+        let inserted = false;
+        if (item.insertAlias) {
+            window.Atomix.ChipsController.insertAlias(item.insertAlias);
+            inserted = true;
+        } else if (item.meta) {
+            window.Atomix.ChipsController.create(item);
+            inserted = true;
+        }
+        this.hide();
+        // true = тег/чипс уже сам вернул фокус и поставил каретку за пробелом,
+        // повторный focus() в _attachItemEvents только сбросил бы каретку.
+        return inserted;
     },
 
     goBack() {
@@ -174,7 +204,7 @@ window.Atomix.MenuController = {
             } else {
                 idx = (idx <= minIndex) ? maxIndex : idx - 1;
             }
-            if (idx === -1 || !this._isGroup(view[idx])) break;
+            if (idx === -1 || !this._isGroup(view[idx]) || this._isCollapsibleGroup(view[idx])) break;
         } while (idx !== start);
         this.selectedIndex = idx;
         this._syncSelection();
@@ -220,9 +250,13 @@ window.Atomix.MenuController = {
         if (!view.length) {
             this.listContainer.innerHTML = `<div class="menu-empty">${window.Atomix.t('menu.noResults', 'No results')}</div>`;
         } else {
+            let inCollapsibleGroup = false;
             this.listContainer.innerHTML = view.map((item, i) => {
                 const isGroup = this._isGroup(item);
-                const isSel = !isGroup && i === this.selectedIndex ? 'selected' : '';
+                const isCollapsibleGroup = this._isCollapsibleGroup(item);
+                if (isGroup) inCollapsibleGroup = isCollapsibleGroup;
+                const isGroupChild = !isGroup && inCollapsibleGroup;
+                const isSel = (!isGroup || isCollapsibleGroup) && i === this.selectedIndex ? 'selected' : '';
                 const isLoad = i === this.loadingIndex;
                 let label = this._withIconSpan(item.name);
                 if (isLoad) {
@@ -232,7 +266,14 @@ window.Atomix.MenuController = {
                 }
                 const arrowIcon = (item.hasChildren && !isLoad && !isGroup) ? '<span class="menu-arrow">&#xE76C;</span>' : '';
                 const groupClass = isGroup ? ' is-group' : '';
-                return `<div class="menu-item ${isSel}${groupClass}" data-index="${i}"><span class="menu-item-text">${label}</span>${arrowIcon}</div>`;
+                const collapsibleClass = isCollapsibleGroup ? ' is-collapsible-group' : '';
+                const childClass = isGroupChild ? ' is-group-child' : '';
+                const collapsed = isCollapsibleGroup && this.collapsedGroups[item.id];
+                const groupArrow = isCollapsibleGroup
+                    ? `<span class="menu-group-arrow">${collapsed ? '&#xE76C;' : '&#xE70D;'}</span>`
+                    : '';
+                const expandedAttribute = isCollapsibleGroup ? ` aria-expanded="${!collapsed}" role="button" tabindex="0"` : '';
+                return `<div class="menu-item ${isSel}${groupClass}${collapsibleClass}${childClass}" data-index="${i}"${expandedAttribute}><span class="menu-item-text">${label}</span>${groupArrow}${arrowIcon}</div>`;
             }).join('');
         }
         this.listContainer.classList.toggle('is-scrollable', this._needsSearch());
@@ -253,13 +294,25 @@ window.Atomix.MenuController = {
     _attachItemEvents() {
         if (!this.listContainer) return;
         Array.from(this.listContainer.querySelectorAll('.menu-item')).forEach(el => {
-            if (el.classList.contains('is-group')) return;
+            if (el.classList.contains('is-collapsible-group')) {
+                el.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const index = parseInt(el.dataset.index, 10);
+                    const group = this._viewItems()[index];
+                    if (!group) return;
+                    this._toggleCollapsibleGroup(group);
+                });
+                return;
+            }
+            if (el.classList.contains('is-group') && !el.classList.contains('is-collapsible-group')) return;
             el.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
                 this.selectedIndex = parseInt(el.dataset.index, 10);
-                this.drillDown();
-                window.Atomix.EditorController.el.focus();
+                // insertAlias/create сами возвращают фокус в поле и ставят курсор за
+                // пробелом; повторный focus() сбросил бы каретку в начало строки.
+                if (!this.drillDown()) window.Atomix.EditorController.el.focus();
             });
         });
     },

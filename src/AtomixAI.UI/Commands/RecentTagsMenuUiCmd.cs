@@ -22,23 +22,23 @@ namespace AtomixAI.UI.Commands
                     new
                     {
                         id = "tags",
-                        name = MenuResponse.Label("🏷️", "Tags"),
+                        name = MenuResponse.Label("🏷️", Localizer.T("menu.tags")),
                         hasChildren = true
                     }
                 });
             }
 
             var items = AtomicStorage.GetCurrentContext()
-                .Select(tag => (object)new
+                .Select(tag =>
                 {
-                    id = tag,
-                    name = WebUtility.HtmlEncode(tag),
-                    hasChildren = false,
-                    meta = new
+                    string alias = tag.StartsWith("#", StringComparison.Ordinal) ? tag : $"#{tag}";
+                    return (object)new
                     {
-                        paramName = tag,
-                        paramType = "Storage Tag"
-                    }
+                        id = tag,
+                        name = WebUtility.HtmlEncode(alias),
+                        hasChildren = false,
+                        insertAlias = alias
+                    };
                 })
                 .ToList();
 

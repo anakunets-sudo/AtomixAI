@@ -340,36 +340,10 @@ function initAliasButtons(container) {
             e.preventDefault();
             e.stopPropagation();
 
-            const alias = btn.getAttribute('data-alias') + " "; // Алиас сразу с пробелом
-            const input = document.getElementById('userInput');
-
-            // 2. Возвращаем фокус на поле ввода (теперь браузер вспомнит точное место курсора)
-            input.focus();
-
-            // 3. Вставка текста строго в позицию каретки курсора
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-
-                // Удаляем выделенный текст, если пользователь что-то выделил перед нажатием
-                range.deleteContents();
-
-                // Создаем текстовую ноду и вставляем её ровно туда, где стоит курсор
-                const textNode = document.createTextNode(alias);
-                range.insertNode(textNode);
-
-                // Сдвигаем курсор строго в конец только что вставленного алиаса
-                range.setStartAfter(textNode);
-                range.setEndAfter(textNode);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } else {
-                // Если фокуса в поле вообще никогда не было — добавляем в конец
-                input.innerText += alias;
-            }
-
-            // 4. Сигнал для автовысоты поля
-            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const alias = btn.getAttribute('data-alias');
+            // Тег из сообщения ИИ вставляется тем же шагом, что и тег из меню
+            // Recent ▸ Tags: span.alias-btn, пробел вне span, курсор за пробелом.
+            if (alias) window.Atomix.ChipsController.insertAlias(alias);
 
             // 5. Визуальный отклик кнопки (так как mousedown срабатывает мгновенно)
             btn.style.background = 'var(--accent)';
@@ -464,5 +438,4 @@ document.addEventListener('mouseout', e => {
         tip.style.display = 'none';
     }
 });
-
 

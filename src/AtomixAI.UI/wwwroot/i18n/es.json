@@ -1,0 +1,53 @@
+{
+  "nav.brand.tooltip": "BIM Wave: inteligencia contextual. Ejecución en Revit.",
+  "nav.free": "BIM Wave Free",
+  "nav.python": "Scripts de Python",
+  "nav.python.tooltip": "Tu biblioteca de scripts de pyRevit",
+  "nav.patternLab": "Laboratorio de patrones",
+  "nav.patternLab.tooltip": "Entrena y ajusta patrones de IA",
+
+  "chat.greetings": [
+    "¡Hola! Soy Livvy, tu asistente de IA de BimWave. ¿En qué trabajamos hoy?",
+    "¡Qué bueno verte de nuevo! Soy Livvy. ¿Cómo puedo ayudarte en Revit?",
+    "Hola, soy Livvy. Describe tu tarea y me encargaré del resto en Revit."
+  ],
+  "chat.listening": "Escuchando comandos...",
+  "chat.thinking": "Preparando la lógica...",
+  "chat.cancel": "Cancelar",
+  "chat.cancelled": "Cancelado por el usuario",
+
+  "input.placeholder": "Describe la secuencia... [Enter para enviar]",
+  "input.voice": "Entrada de voz",
+  "input.send": "Enviar",
+
+  "footer.settings": "Expandir la configuración del entorno",
+  "footer.aiCore": "Núcleo de IA:",
+  "footer.aiModel": "Modelo de IA:",
+
+  "rate.markSolution": "Marcar como solución",
+  "rate.markedSolution": "Marcado como solución",
+  "rate.markError": "Marcar como error",
+  "rate.markedError": "Marcado como error",
+
+  "menu.recent": "Recientes",
+  "menu.tags": "Etiquetas",
+  "menu.selection": "Selección",
+  "menu.commands": "Comandos",
+  "menu.back": "Atrás",
+  "menu.search": "Buscar",
+  "menu.search.placeholder": "Buscar...",
+  "menu.noResults": "No hay resultados",
+
+  "selection.pickInView": "Seleccionar elementos en la vista",
+  "selection.pickPrompt": "Selecciona los elementos y luego haz clic en Finalizar",
+  "selection.instanceParams": "Parámetros de instancia",
+  "selection.typeParams": "Parámetros de tipo",
+  "selection.instanceParam": "Parámetro de instancia",
+  "selection.typeParam": "Parámetro de tipo",
+  "selection.noType": "Sin tipo",
+  "selection.noCategory": "Sin categoría",
+
+  "ribbon.panel": "Herramientas",
+  "ribbon.openChat": "Abrir chat\ncon IA",
+  "ribbon.openChat.tooltip": "Abrir el panel de control de IA"
+}

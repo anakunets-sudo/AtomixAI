@@ -435,6 +435,32 @@ opacity: .8;
     color: var(--accent);
     min-height: 24px;
 }
+.menu-item.is-collapsible-group,
+.menu-item.is-collapsible-group:hover,
+.menu-item.is-collapsible-group.selected {
+    min-height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 600;
+}
+.menu-item.is-collapsible-group:hover {
+    border-color: var(--accent);
+}
+.menu-group-arrow {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    font-family: 'Segoe MDL2 Assets';
+    font-size: 12px;
+    color: var(--menu-arrow);
+}
+.menu-item.is-group-child {
+    margin-left: 12px;
+    width: calc(100% - 12px);
+}
 /*.menu-item.selected:hover {
     background: rgba(var(--bg), 0.3);
 }*/

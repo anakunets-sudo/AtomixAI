@@ -259,7 +259,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"REFINEMENT_MESSAGE_2 explicitly said mark → ParameterName Mark. Value Garage and Operator == are given. Sequence complete; active_context_tag empty. Mark is used only because the user named it.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"Value\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
+                "arguments": "{\"thought\": \"REFINEMENT_MESSAGE_2 explicitly stated: mark → ParameterName Mark. Operator == is specified. The parameter value \\\"Garage\\\" is specified, and I use it as-is because I never translate user-provided parameter values. The sequence is complete, 'active_context_tag' is empty. Mark is used only because the user gave it that name.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"Value\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
             }
         }]
     },
@@ -283,7 +283,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"User wants walls whose some text field begins with G, but they never named the parameter (not Mark, not Name). Guessing Mark is forbidden. Halt and ask for ParameterName.\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter should I check — Mark, Name, Comments, or something else?\"}"
+                "arguments": "{\"thought\": \"The user wants to select walls whose value for a text parameter starts with the letter \\\"G\\\". I never translate parameter values. The user did not specify the parameter name (neither Mark nor Name). Guessing that it is Mark is forbidden. Halt execution and ask for the parameter name (ParameterName).\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter name (ParameterName) should I use?\"}"
             }
         }]
     },
@@ -303,9 +303,12 @@ BASE_TECH_RULES = """
 <DATA_FORMATTING_RULES>
 - NUMERIC VALUES: Always send as STRINGS with units. Format: "VALUEunit". Supported units: "mm", "m", "ft", "in", "cm". Example: {"Height": "3000mm"}.
 - DECIMAL SEPARATOR: Always use a dot (.) for numbers.
-- LANGUAGE: Translate the user's message into English.
-- Respond in the user's language, but keep tool parameters technical.
 </DATA_FORMATTING_RULES>
+<REQUEST_TRANSLATION_RULES>
+- LANGUAGE AND TRANSLATION: For internal interpretation and planning, translate all natural-language content in the user's request into English, including the original message and every refinement. Do not translate explicitly provided parameter values. Preserve each value exactly as written, including spelling, capitalization, punctuation, and language, and pass it unchanged in tool arguments.
+- Resolve explicitly named parameter labels or synonyms to the exact Revit parameter name according to the parameter-name rules; never guess a parameter name. Preserve technical identifiers and hashtag tokens exactly as given.
+- Write user-facing messages and final responses in the user's language. Keep tool arguments in the exact technical format required by the tool.
+</REQUEST_TRANSLATION_RULES>
 
 <STRICT_CONCISENESS_PROTOCOL>
 CRITICAL:

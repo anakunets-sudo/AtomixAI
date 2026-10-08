@@ -1,6 +1,82 @@
 // chips.js
 window.Atomix = window.Atomix || {};
 window.Atomix.ChipsController = {
+    insertAlias(alias) {
+        const input = window.Atomix.EditorController.el;
+        if (!input || !alias) return;
+
+        // Тег — это span.alias-btn. Меню Recent ▸ Tags (menu.js) и клик по тегу
+        // в сообщении ИИ (main.js) зовут один и тот же метод, поэтому вставка
+        // всегда идёт по одному сценарию.
+        const aliasElement = document.createElement('span');
+        aliasElement.className = 'alias-btn';
+        aliasElement.dataset.alias = alias;
+        aliasElement.textContent = alias;
+
+        this._insertTag(aliasElement, ' ');
+    },
+
+    // Вставляет тег на место каретки (или в конец поля) и гарантирует, что СНАРУЖИ
+    // span стоит ровно один пробел, а курсор — сразу за этим пробелом.
+    _insertTag(element, spaceChar = ' ') {
+        const input = window.Atomix.EditorController.el;
+        if (!input || !element) return;
+
+        // Каретку снимаем ДО focus(): в WebView2 переключение фокуса сбрасывает
+        // выделение contenteditable в начало, и тег улетал бы в начало строки.
+        const range = this._captureCaretIn(input) || this._caretAtEnd(input);
+        input.focus();
+
+        range.deleteContents();
+        this._removeTriggerBeforeCaret(input, range);
+        range.insertNode(element);
+
+        const space = this._ensureTrailingSpace(element, spaceChar);
+
+        // Курсор — строго за пробелом, уже вне span.
+        const caret = document.createRange();
+        caret.setStart(space, spaceChar.length);
+        caret.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(caret);
+
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+
+    // Текущий Range, только если он внутри поля ввода.
+    _captureCaretIn(input) {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return null;
+        const range = selection.getRangeAt(0);
+        return input.contains(range.startContainer) ? range : null;
+    },
+
+    _caretAtEnd(input) {
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        range.collapse(false);
+        return range;
+    },
+
+    // Ровно один пробел сразу после тега, вне span. Повторная вставка не задваивает его.
+    _ensureTrailingSpace(element, spaceChar) {
+        // Range.insertNode расщепляет текстовый узел и оставляет после тега пустой
+        // узел — убираем его, чтобы при повторных вставках не копился мусор.
+        let next = element.nextSibling;
+        while (next && next.nodeType === Node.TEXT_NODE && next.textContent.length === 0) {
+            const empty = next;
+            next = next.nextSibling;
+            empty.remove();
+        }
+        if (next && next.nodeType === Node.TEXT_NODE && next.textContent.startsWith(spaceChar)) {
+            return next;
+        }
+        const space = document.createTextNode(spaceChar);
+        element.after(space);
+        return space;
+    },
+
     // Создание и вставка чипса по объекту из меню
     create(item) {
         const input = window.Atomix.EditorController.el;
@@ -30,33 +106,9 @@ window.Atomix.ChipsController = {
         chip.setAttribute('data-tooltip', tooltipText);
         chip.innerText = `#${meta.paramName}`;
 
-        input.focus();
-        const selection = window.getSelection();
-        const space = document.createTextNode('\u00A0');
-
-        if (selection.rangeCount > 0 && input.contains(selection.anchorNode)) {
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            this._removeTriggerBeforeCaret(input, range);
-
-            range.insertNode(chip);
-            chip.after(space);
-
-            const caret = document.createRange();
-            caret.setStart(space, 1);
-            caret.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(caret);
-        } else {
-            this._removeTrailingTrigger(input);
-            input.appendChild(chip);
-            input.appendChild(space);
-            const caret = document.createRange();
-            caret.setStart(space, 1);
-            caret.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(caret);
-        }
+        // Тот же шаг вставки, что и у тегов: span + пробел вне span + курсор за пробелом.
+        // У чипса пробел неразрывный, чтобы он не «прилипал» к следующему слову.
+        this._insertTag(chip, '\u00A0');
 
         // Триггерим событие изменения высоты поля, как в main.js
         input.dispatchEvent(new Event('input'));
@@ -102,11 +154,5 @@ window.Atomix.ChipsController = {
         if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
             this._deleteTriggerAtEnd(container.childNodes[offset - 1]);
         }
-    },
-
-    _removeTrailingTrigger(input) {
-        const nodes = input.childNodes;
-        if (!nodes.length) return;
-        this._deleteTriggerAtEnd(nodes[nodes.length - 1]);
     }
 };

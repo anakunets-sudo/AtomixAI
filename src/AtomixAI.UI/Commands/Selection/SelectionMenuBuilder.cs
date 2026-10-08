@@ -52,8 +52,9 @@ namespace AtomixAI.UI.Commands.Selection
                 items.Add(new
                 {
                     id = "grp_" + categoryName,
-                    name = WebUtility.HtmlEncode($"< {categoryName} ({elements.Count}) >"),
+                    name = WebUtility.HtmlEncode($"{categoryName} ({elements.Count})"),
                     isGroup = true,
+                    isCollapsibleGroup = true,
                     hasChildren = false
                 });
 
