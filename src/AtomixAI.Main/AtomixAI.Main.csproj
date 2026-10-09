@@ -41,6 +41,12 @@
     <ProjectReference Include="..\AtomixAI.UI\AtomixAI.UI.csproj" />
   </ItemGroup>
 
+  <!-- PythonRuntime не хранится в git: при отсутствии восстанавливаем embedded Python + requirements.txt -->
+  <Target Name="EnsurePythonRuntime" BeforeTargets="BeforeBuild" Condition="!Exists('$(MSBuildProjectDirectory)\PythonRuntime\python.exe')">
+    <Message Importance="high" Text="[AtomixAI] PythonRuntime отсутствует — запускаю Setup-PythonRuntime.ps1 (скачивание Python 3.10 + pip install)..." />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Setup-PythonRuntime.ps1&quot;" />
+  </Target>
+
   <!-- Копирование контента -->
   <ItemGroup>
     <Content Include="PythonRuntime\**\*">

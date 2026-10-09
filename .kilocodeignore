@@ -1,6 +1,8 @@
 # Исключаем временные файлы компиляции Visual Studio (самый главный источник цикличного рендеринга индексов)
 bin/
 obj/
+src/AtomixAI.Main/PythonRuntime/
+src/AtomixAI.Main/Orchestrator/model/
 .vs/
 *.user
 *.suo
@@ -22,7 +24,6 @@ __pycache__/
 
 # Исключаем тяжелые медиа-файлы и логи, чтобы не тратить оперативку и токены
 *.log
-*.txt
 *.pdf
 *.zip
 *.rar

@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Embedded Python runtime 
+src/AtomixAI.Main/PythonRuntime/
+src/AtomixAI.Main/Orchestrator/model/ 
