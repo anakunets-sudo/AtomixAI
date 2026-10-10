@@ -1,9 +1,9 @@
 {
   "nav.brand.tooltip": "BIM Wave：情境智能，在 Revit 中执行。",
-  "nav.free": "BIM Wave 免费版",
-  "nav.python": "Python 脚本",
+  "nav.free": "免费版",
+  "nav.python": "脚本",
   "nav.python.tooltip": "您的 pyRevit 脚本库",
-  "nav.patternLab": "模式实验室",
+  "nav.patternLab": "实验室",
   "nav.patternLab.tooltip": "训练并调整 AI 模式",
 
   "chat.greetings": [

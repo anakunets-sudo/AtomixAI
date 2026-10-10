@@ -1,9 +1,9 @@
 {
   "nav.brand.tooltip": "BIM Wave: Contextual intelligence. Revit execution.",
-  "nav.free": "BIM Wave Free",
-  "nav.python": "Python scripts",
+  "nav.free": "Free",
+  "nav.python": "Scripts",
   "nav.python.tooltip": "Your pyRevit Scripts Library",
-  "nav.patternLab": "Pattern Lab",
+  "nav.patternLab": "Lab",
   "nav.patternLab.tooltip": "Train & Tune AI Patterns",
 
   "chat.greetings": [

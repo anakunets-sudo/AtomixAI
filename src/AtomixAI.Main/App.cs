@@ -212,21 +212,8 @@ namespace AtomixAI.Main
                 startInfo.EnvironmentVariables["PYTHONPATH"] = Path.Combine(assemblyDir, "PythonRuntime");
                 // ЖЕСТКИЙ ХАК ДЛЯ PYTHON 3.7+: Включаем глобальный режим UTF-8 на уровне процесса Windows
                 startInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
-                // API key управляется непосредственно в Python-оркестраторе.
-                // Здесь он только передаётся как аргумент запуска, если найден в окружении пользователя/машины.
-                string openRouterKey =
-                    Environment.GetEnvironmentVariable("OPENROUTER_API_KEY", EnvironmentVariableTarget.User)
-                    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY", EnvironmentVariableTarget.Machine);
-                if (!string.IsNullOrWhiteSpace(openRouterKey))
-                {
-                    string safeKey = openRouterKey.Replace("\"", "\\\"");
-                    startInfo.Arguments = $"\"{scriptPath}\" --api-key \"{safeKey}\"";
-                }
-                else
-                {
-                    startInfo.Arguments = $"\"{scriptPath}\"";
-                    System.Diagnostics.Debug.WriteLine("[AtomixAI] OPENROUTER_API_KEY is not set in User/Machine environment; orchestrator will read it from its own config/env fallback.");
-                }
+                // Оркестратор полностью автономен: ключи и провайдеры он читает сам
+                // (переменные окружения User/Machine, реестр, %APPDATA%\AtomixAI\providers.json).
                 _pyProcess = new System.Diagnostics.Process { StartInfo = startInfo };
                 _pyProcess.Start();
                 ProcessJobTracker.AddProcess(_pyProcess);

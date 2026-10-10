@@ -4,7 +4,7 @@
     --panel: #f3f3f3;
     --text: #333333;
     --nav-text: #444;
-    --nav-bg: #f3f3f3;
+    --nav-bg: #f0f0f0;
     --accent: #0078d4;
     --danger: #d13438;
     --ai-msg: #f0f0f0;
@@ -12,7 +12,7 @@
     --user-text: #333;
     --border: #e0e0e0;
     --input-bg: #ffffff;
-    --scroll-thumb: #cccccc;
+    --scroll-thumb: #a1a1a1;
     --menu-arrow: #999;
     --thinking-dim: #8c8c8c;
     --thinking-lit: #1f1f1f;
@@ -24,14 +24,14 @@
     --panel: #222933;
     --text: #f5f5eb;
     --nav-text: #f5f5eb;
-    --nav-bg: #1a1f25;
+    --nav-bg: #2c3440;
     --accent: #00a2ff;
     --ai-msg: #2c3440;
     --user-msg: #222933;
     --user-text: #e0e0e0;
     --border: #485363;
     --input-bg: #222933;
-    --scroll-thumb: #555555;
+    --scroll-thumb: #758397;
     --menu-arrow: #999;
     --thinking-dim: #8a93a3;
     --thinking-lit: #f5f5eb;
@@ -85,7 +85,6 @@ body {
 }
 
 .version-tag {
-    font-size: 12px;
     align-items: center;
     color: var(--nav-text);
 }
@@ -95,12 +94,19 @@ body {
     align-items: center;
 }
 
+.brand svg {
+    display: block;
+}
+
+[data-theme='dark'] .brand .fil0 {
+    fill: url(#id0-dark);
+}
+
 .nav-tools {
     display: flex;
+    align-items: center;
     gap: 2px;
-    margin-left: 0;
-    border-left: 1px solid var(--border);
-    padding-left: 0px;
+    margin: 2px 0;
     color: var(--nav-text);
 }
 
@@ -110,9 +116,21 @@ body {
     color: var(--nav-text);
     padding: 2px 6px;
     cursor: pointer;
-    border-right: 1px solid var(--border);
     font-size: 13px;
+    border-radius: 6px;
     /*font-weight: bold;*/
+}
+
+.nav-btn:hover {
+    background: var(--border);
+}
+
+.nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    padding: 0 4px;
 }
 
 /* --- ЧАТ --- */

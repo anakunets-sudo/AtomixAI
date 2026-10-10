@@ -38,34 +38,108 @@ log(f"REVIT PYTHON VERSION: {sys.version}")
 log("[*] Checking dependencies...")
 
 # --- NEW CONFIGURATION ---
-# --- NEW CONFIGURATION ---
 PIPE_NAME = r'\\.\pipe\AtomixAI_Bridge_Pipe'
-MODEL_NAME = 'google/gemini-2.5-flash-lite'
 
-#'openai/gpt-oss-safeguard-20b'
-#'openai/gpt-5-nano' 
-#'google/gemini-2.5-flash-lite'
-#'deepseek/deepseek-v4-flash-0731' 
+# --- PROVIDERS ---------------------------------------------------------------
+# Все провайдеры — OpenAI-совместимые chat/completions эндпоинты.
+# Добавить нового: одна запись здесь, либо переопределить без правки кода через
+# %APPDATA%\AtomixAI\providers.json (ключ берётся из окружения/реестра, не из репо).
+DEFAULT_PROVIDERS = {
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+        "api_key_env": "OPENROUTER_API_KEY",
+        # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
+        # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4-flash-0731'
+        "model": "google/gemini-2.5-flash-lite",
+    },
+    "teamorouter": {
+        "base_url": "https://api.teamorouter.com/v1/chat/completions",
+        "api_key_env": "TEAMOROUTER_API_KEY",
+        "model": "gemini-3.5-flash-lite",
+    },
+}
 
-def resolve_api_key():
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--api-key", dest="api_key", default=None)
-    args, _ = parser.parse_known_args()
+USER_CFG = os.path.join(
+    os.environ.get("APPDATA", os.path.expanduser("~")), "AtomixAI", "providers.json"
+)
 
-    if args.api_key and args.api_key.strip():
-        return args.api_key.strip()
 
-    env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
-    if env_key:
-        return env_key
+def load_providers():
+    """Дефолты + опциональные переопределения из %APPDATA% (вне репозитория)."""
+    cfg = {name: dict(p) for name, p in DEFAULT_PROVIDERS.items()}
+    active = "openrouter"
+    try:
+        if os.path.isfile(USER_CFG):
+            with open(USER_CFG, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for name, p in (data.get("providers") or {}).items():
+                cfg.setdefault(name, {}).update(p)
+            active = data.get("active") or active
+    except Exception as ex:
+        log(f"[!] providers.json: {ex}")
+    return active, cfg
 
+
+def _registry_env(name):
+    """Свежие значения из реестра User/Machine (без перезапуска Revit)."""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            with winreg.OpenKey(root, "Environment") as k:
+                value, _ = winreg.QueryValueEx(k, name)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        except OSError:
+            continue
     return ""
 
 
-API_KEY = resolve_api_key()
+# legacy: `python orchestrator.py --api-key ...` продолжает работать
+_parser = argparse.ArgumentParser(add_help=False)
+_parser.add_argument("--api-key", dest="api_key", default=None)
+_cli_args, _ = _parser.parse_known_args()
+CLI_API_KEY = (_cli_args.api_key or "").strip()
+
+
+def resolve_provider_key(provider):
+    """--api-key (legacy) -> env -> реестр User/Machine -> api_key в providers.json."""
+    if CLI_API_KEY:
+        return CLI_API_KEY
+    env_name = provider.get("api_key_env", "")
+    for src in (os.environ.get(env_name, ""), _registry_env(env_name), provider.get("api_key", "")):
+        if isinstance(src, str) and src.strip():
+            return src.strip()
+    return ""
+
+
+ACTIVE_NAME, PROVIDERS = load_providers()
+MODEL_NAME = PROVIDERS[ACTIVE_NAME]["model"]
+FULL_URL = PROVIDERS[ACTIVE_NAME]["base_url"]
+API_KEY = resolve_provider_key(PROVIDERS[ACTIVE_NAME])
+
+
+def use_provider(name):
+    """Глобальный переключатель провайдера — вызывать из любого места кода."""
+    global ACTIVE_NAME, MODEL_NAME, FULL_URL, API_KEY
+    if name not in PROVIDERS:
+        log(f"[!] Unknown provider '{name}'. Available: {', '.join(PROVIDERS)}")
+        return False
+    provider = PROVIDERS[name]
+    ACTIVE_NAME = name
+    MODEL_NAME = provider["model"]
+    FULL_URL = provider["base_url"]
+    API_KEY = resolve_provider_key(provider)
+    if not API_KEY:
+        log(f"[!] {provider.get('api_key_env')} is empty — setx it or add 'api_key' to providers.json")
+    log(f"[*] Provider -> {name} ({MODEL_NAME})")
+    return True
+
+
 if not API_KEY:
-    log("[!] OPENROUTER_API_KEY is empty — OpenRouter calls will return 401. Pass --api-key to the orchestrator or set OPENROUTER_API_KEY in the environment before launch.")
-FULL_URL = 'https://openrouter.ai/api/v1/chat/completions'
+    log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
 PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
 PROVIDER_FLEX = {
     # Сначала пробуем сэкономить на AI Studio Flex, при сбое — прыгаем на Vertex
@@ -367,6 +441,9 @@ def execute_eviction_protocol(user_text, detected_lang, headers):
 
 def process_ai_logic(user_text, client, generation=0):
     global chat_history, detected_lang, dynamic_manual, bim_sequence_tool
+
+    use_provider("teamorouter")
+    
     log("[START] START OF SESSION (Stateless Mode via Function Calling)...") 
     
     headers = {

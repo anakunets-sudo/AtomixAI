@@ -1,9 +1,9 @@
 {
   "nav.brand.tooltip": "BIM Wave: Kontextbezogene Intelligenz. Ausführung in Revit.",
-  "nav.free": "BIM Wave Free",
-  "nav.python": "Python-Skripte",
+  "nav.free": "Kostenlos",
+  "nav.python": "Skripte",
   "nav.python.tooltip": "Ihre pyRevit-Skriptbibliothek",
-  "nav.patternLab": "Pattern Lab",
+  "nav.patternLab": "Lab",
   "nav.patternLab.tooltip": "KI-Muster trainieren und anpassen",
 
   "chat.greetings": [
