@@ -23,6 +23,7 @@
   "footer.settings": "Expandir la configuración del entorno",
   "footer.aiCore": "Núcleo de IA:",
   "footer.aiModel": "Modelo de IA:",
+  "footer.modelName": "Google Gemini",
 
   "rate.markSolution": "Marcar como solución",
   "rate.markedSolution": "Marcado como solución",

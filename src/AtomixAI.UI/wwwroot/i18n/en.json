@@ -23,6 +23,7 @@
   "footer.settings": "Expand environment settings",
   "footer.aiCore": "AI core:",
   "footer.aiModel": "AI model:",
+  "footer.modelName": "Google Gemini",
 
   "rate.markSolution": "Mark as solution",
   "rate.markedSolution": "Marked as solution",

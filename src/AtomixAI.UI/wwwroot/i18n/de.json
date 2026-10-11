@@ -23,6 +23,7 @@
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",
   "footer.aiModel": "KI-Modell:",
+  "footer.modelName": "Google Gemini",
 
   "rate.markSolution": "Als Lösung markieren",
   "rate.markedSolution": "Als Lösung markiert",

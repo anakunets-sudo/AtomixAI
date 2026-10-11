@@ -23,6 +23,7 @@
   "footer.settings": "Afficher les paramètres d’environnement",
   "footer.aiCore": "Moteur IA :",
   "footer.aiModel": "Modèle IA :",
+  "footer.modelName": "Google Gemini",
 
   "rate.markSolution": "Marquer comme solution",
   "rate.markedSolution": "Marqué comme solution",

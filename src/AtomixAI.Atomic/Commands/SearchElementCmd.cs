@@ -27,10 +27,10 @@ namespace AtomixAI.Atomic.Commands
         public class SearchInitSchema : DynamicBimContract
         {
             [AiParam(@"The exact target boundary where the search must start. Allowed values:
-- 'active view':  Assign this scope to find physical elements/instances only if the user explicitly requests them 'here', 'in this view', 'on this sheet', or 'in the current view' or ALWAYS USE this if the search location is specified.
-- 'project': Use this option to search for physical elements/instances when the user EXPLICITLY asks to search the entire project, such as 'everywhere', 'entire project', or 'all model elements'.
-- 'selection': Use this option to find physical elements/instances when the user specifies 'selected', 'in selection', or 'currently highlighted elements'.
-- 'element types': Use this option ONLY if the user explicitly requests types rather than physical instances, using words like 'types', 'symbols', or 'family definitions' (e.g., 'find door types', 'get wall types').",
+- 'ActiveView':  Assign this scope to find physical elements/instances only if the user explicitly requests them 'here', 'in this view', 'on this sheet', or 'in the current view' or ALWAYS USE this if the search location is specified.
+- 'Project': Use this option to search for physical elements/instances when the user EXPLICITLY asks to search the entire project, such as 'everywhere', 'entire project', or 'all model elements'.
+- 'Selection': Use this option to find physical elements/instances when the user specifies 'selected', 'in selection', or 'currently highlighted elements'.
+- 'ElementTypes': Use this option ONLY if the user explicitly requests types rather than physical instances, using words like 'types', 'symbols', or 'family definitions' (e.g., 'find door types', 'get wall types').",
             isRequired: true)]
             public string Scope { get; set; }
         }
@@ -67,12 +67,12 @@ namespace AtomixAI.Atomic.Commands
                     collector = new FilteredElementCollector(doc, uidoc.Selection.GetElementIds());
                     break;
 
-                case "active view":                
+                case "activeview":                
                     System.Diagnostics.Debug.WriteLine($"[SEARCH_INIT] activeview work.");
                     // По умолчанию собираем все видимые элементы на активном виде
                     collector = new FilteredElementCollector(doc, uidoc.ActiveView.Id);
                     break;
-                case "element types":
+                case "elementtypes":
                     collector = new FilteredElementCollector(doc)
                         .WhereElementIsElementType();
                     break;
@@ -94,10 +94,10 @@ namespace AtomixAI.Atomic.Commands
 
             contract.Set(BimKeys.Search.Collector, collector);
 
-            //var words = Regex.Replace(scope, @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ").ToLower();
+            var words = Regex.Replace(scope, @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ").ToLower();
 
             // Передаем плоский список List<ElementId> в AtomicStorage под тегом Out!
-            return SetOutput(contract, count, true, $"IMPORTANT for FINAL report: initialized {scope} scope.");
+            return SetOutput(contract, count, true, $"IMPORTANT for FINAL report: initialized {words} scope.");
         }
     }
 }

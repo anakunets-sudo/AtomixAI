@@ -23,6 +23,7 @@
   "footer.settings": "展开环境设置",
   "footer.aiCore": "AI 核心：",
   "footer.aiModel": "AI 模型：",
+  "footer.modelName": "企业云",
 
   "rate.markSolution": "标记为解决方案",
   "rate.markedSolution": "已标记为解决方案",

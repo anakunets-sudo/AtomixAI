@@ -98,7 +98,7 @@ body {
     display: block;
 }
 
-[data-theme='dark'] .brand .fil0 {
+[data-theme='dark'] .brand svg g {
     fill: url(#id0-dark);
 }
 

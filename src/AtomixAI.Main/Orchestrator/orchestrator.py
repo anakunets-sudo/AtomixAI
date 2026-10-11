@@ -166,11 +166,12 @@ bim_sequence_tool = {
                 "thought": {
                     "type": "string",
                     "description": 
-                        "Internal reasoning process. CRITICAL CHAIN-OF-THOUGHT MANDATE: Before building the sequence, you MUST explicitly write your step-by-step reasoning here: "
-                        "1) State that you have read the <ACTIVE_REVIT_MEMORY_TAGS> block. "
-                        "2) Find the highest index number matching the pattern #[category]_[action]_[NUMBER] within <ACTIVE_REVIT_MEMORY_TAGS>. "
-                        "3) Explicitly calculate the next increment number (max + 1) and state the exact new tag name you will use for the 'Out' argument. "
-                        "Be concise and strict (30-50 words in English). MANDATORY FOR EVERY TURN!"
+                        "Apply the <REQUEST_TRANSLATION_RULES>: never translate parameter values if the parameters are explicitly provided by the user. "
+                        "Apply the <REQUEST_TRANSLATION_RULES> throughout: never translate parameter values explicitly provided by the user. "
+                        "1) From <ACTIVE_REVIT_MEMORY_TAGS>, state the current highest index per [category]_[action]_[number]. "
+                        "2) Compute the next index (max + 1, or 1 for a new group). "
+                        "3) State the exact new tag name(s) for 'Out'; each MUST end with NUMBER. "
+                        "Present reasoning concise and strict (30-50 words in English). MANDATORY FOR EVERY TURN!"
                 },
                 #"user_language": {
                 #    "type": "string",
@@ -189,7 +190,7 @@ bim_sequence_tool = {
                         "properties": {
                             "name": { 
                                 "type": "string", 
-                                "description": "The exact tool name." 
+                                "description": "The EXACT tool name from <AVAILABLE_BIM_TOOLS> (e.g., 'select_elements', 'search_init'). NEVER append numbers, indexes, or suffixes to the tool name!" 
                             },
                             "arguments": { 
                                 "type": "object", 
@@ -364,8 +365,6 @@ class ContextStateManager:
         self.flood_count = 0 
         self.user_steps = []            # Полная очистка истории шагов при сбросе/успехе
 
-
-
 # Инициализация глобального стейта памяти сессии
 session_state = ContextStateManager()
 
@@ -491,7 +490,7 @@ def process_ai_logic(user_text, client, generation=0):
         current_session = [{
             'role': 'system',
             'content': [
-                {"type": "string", "text": system_rules},
+                {"type": "text", "text": system_rules},
                 {"type": "text", "text": tools_manifest, "cache_control": {"type": "ephemeral"}}, # ФИКСИРУЕМ КЭШ ЗДЕСЬ
             ]
         }]
@@ -573,7 +572,10 @@ def process_ai_logic(user_text, client, generation=0):
             "model": MODEL_NAME,
             "messages": current_session,
             "tools": [bim_sequence_tool],
-            "tool_choice": "auto", 
+            "tool_choice": {
+                "type": "function",
+                "function": {"name": "execute_bim_sequence"}
+            },
             "temperature": 0.0, 
             "provider": PROVIDER,
             "reasoning": {
@@ -632,8 +634,15 @@ def process_ai_logic(user_text, client, generation=0):
                     session_state.clear()
                     
                     return execute_eviction_protocol(user_text, detected_lang, headers)
-
-            return raw_content
+                
+            ai_user_msg = ""            
+            if raw_content:
+                try:
+                    content_json = json.loads(raw_content)
+                    ai_user_msg = content_json.get("user_facing_message", "").strip()
+                except (json.JSONDecodeError, AttributeError):
+                    ai_user_msg = raw_content.strip()
+            return ai_user_msg or "Please clarify your request."
 
         # -----------------------------------------------------------------
         # ШАГ 2. СЦЕНАРИЙ Б: ИИ СГЕНЕРИРОВАЛ ВЫЗОВ ФУНКЦИИ
@@ -761,12 +770,12 @@ def process_ai_logic(user_text, client, generation=0):
                 f"ROLE: Professional Revit Assistant (female persona, Livvy).\n"
                 f"TASK: Humanize technical Revit reports <TECHNICAL_REPORT_LOG> into friendly chat messages.\n"
                 f"ROLE_AND_MISSION>\n"
-                f"###NARROW_INTERFACE_UX_RULES"
-                f"CRITICAL MANDATES:"
+                f"###NARROW_INTERFACE_UX_RULES\n"
+                f"CRITICAL MANDATES:\n"
                 f"1. MAX LENGTH: Keep the entire response under 2-3 short sentences.\n"
                 f"2. NARROW CHAT FORMATTING: Write in short, punchy fragments. Avoid long, wide blocks of text.\n"
                 f"3. NO ROBOTIC DRYNESS: Stay friendly, warm, and professional. Use 1-2 emojis naturally to maintain persona.\n"
-                f"MAIN_OUTPUT_DIRECTIVES:"
+                f"MAIN_OUTPUT_DIRECTIVES:\n"
                 f"1. LANGUAGE: You MUST answer strictly in <TARGET_LANGUAGE> using the past tense. Preserve parameter values explicitly provided by the user exactly as written; never translate or alter them.\n"
                 f"2. GENDER: Your gender is female. Your name is Livvy. Adopt a friendly, supportive, and professional female persona. Be concise but encouraging.\n"
                 f" 3. NEVER say hello or greet the user.\n"
@@ -792,13 +801,15 @@ def process_ai_logic(user_text, client, generation=0):
                         f"###SUCCESS_REPORT_HUMANIZATION_SYSTEM\n"
                         f"OUTPUT_FORMATTING:\n"
                         f"1. Combine the <TECHNICAL_REPORT_LOG> into a single generalized statement, emphasizing the LAST STEP.\n"
-                        f"2. Don't count the steps of actions. Skip straight to the FINAL result.\n"
-                        f"3. Be concise, instead of a success message, proceed directly to FINAL result.\n" 
+                        f"2. MANDATORY SCOPE/DIRECTIVES: If ANY step message contains 'IMPORTANT', you MUST mention that specific detail in the final response alongside the final result, even though it occurred on an earlier step.\n"
+                        f"3. Don't count the steps of actions. Skip straight to the combined outcome.\n"
+                        f"4. Be concise, instead of a success message, proceed directly to the final result.\n"
+                        f"5. If the last step involves a quantity, you must specify the quantity in the FINAL result.\n"
                         f"###REPORT_TAG_SYNCHRONIZATION\n"
-                        f"3. TOOL TAGS: You need to look for the tag from the END of the <TECHNICAL_REPORT_LOG> and IF you find the tag then include it in the FINAL RESULT. Usually one tag is enough.\n"
-                        f"4. NO GHOST TAGS: Never mention a tag not specified in the <TECHNICAL_REPORT_LOG>.\n"
-                        f"5. MANDATORY HASHTAG PREFIX: You MUST always keep the '#' symbol prefix before any tag name (e.g., '#new_wall_1', '#found_walls_2').\n"
-                        f"6. MANDATORY HASHTAG PREFIX & SUFFIX: You MUST always keep the '#' symbol prefix before any tag name. The tag name MUST strictly end with an underscore and a numerical index (e.g., '#create_wall_1', '#create_wall_2'). NEVER append any textual suffixes, status words like '#ok', or custom comments to the tag string itself.\n"
+                        f"1. TOOL TAGS: You need to look for the tag from the END of the <TECHNICAL_REPORT_LOG> and IF you find the tag then include it in the FINAL RESULT. Usually one tag is enough.\n"
+                        f"2. NO GHOST TAGS: Never mention a tag not specified in the <TECHNICAL_REPORT_LOG>.\n"
+                        f"3. MANDATORY HASHTAG PREFIX: You MUST always keep the '#' symbol prefix before any tag name (e.g., '#new_wall_1', '#found_walls_2').\n"
+                        f"4. MANDATORY HASHTAG PREFIX & SUFFIX: You MUST always keep the '#' symbol prefix before any tag name. The tag name MUST strictly end with an underscore and a numerical index (e.g., '#create_wall_1', '#create_wall_2'). NEVER append any textual suffixes, status words like '#ok', or custom comments to the tag string itself.\n"
                     )
                 # 4. Ветка В: ОБРАБОТКА ОШИБКИ (Исправлена f-строка на каждой линии)
                 else:
@@ -822,14 +833,14 @@ def process_ai_logic(user_text, client, generation=0):
                         )
                     }
                 ],
-                "temperature": 0.1,
+                "temperature": 0.3,
                 "provider": PROVIDER_FLEX,
                 "reasoning": {
                     "effort": "none",
                     "exclude": True,
                     "enabled": False
                 },
-                "max_tokens": 2048,               
+                "max_tokens": 4096,               
                 }
 
             try:

@@ -16,7 +16,7 @@ namespace AtomixAI.Atomic.Commands
     [AiInfo(
     name: "select_elements",
     group: AtomicGroupType.Search,
-    description: "Selects elements from previous tool output. Never use as the first command. Action: Highlights elements in model.",
+    description: "Selects elements from previous tool output. Never use as the first command. Action: Highlights elements in model. IMPORTANT: 'In' and 'Out' are the SAME tag for this tool — always set 'Out' equal to 'In' and never use a different tag for Out.",
     keywords: new[] { "select"})]
     public class SelectElementsCmd : BaseAtomicCommand
     {
