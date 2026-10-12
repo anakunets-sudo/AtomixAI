@@ -219,7 +219,16 @@ window.Atomix.MenuController = {
         if (!this.backHost) return;
         const hasHistory = this.history.length > 0;
         if (!hasHistory) {
-            this.backHost.innerHTML = '';
+            this.backHost.innerHTML = `<div class="menu-back-row menu-close-row" id="menu-header-close"><span class="menu-back">&#xE70D;</span><span class="menu-label">${window.Atomix.t('menu.close', 'Close')}</span><span class="menu-kbd">Esc</span></div>`;
+            const close = document.getElementById('menu-header-close');
+            if (close) {
+                close.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    this.hide();
+                    window.Atomix.EditorController.el.focus();
+                });
+            }
             return;
         }
         const isHeaderSelected = this.selectedIndex === -1 ? 'selected' : '';

@@ -1,22 +1,4 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
-  "permission": {
-    "task": "allow"
-  },
-  "compaction": {
-    "auto": true
-  },
-  "provider": {
-    "teamorouter": {
-      "models": {
-        "gpt-6.1-sol": {
-          "limit": {
-            "context": 272000,
-            "input": 240000,
-            "output": 32000
-          }
-        }
-      }
-    }
-  }
+
 }

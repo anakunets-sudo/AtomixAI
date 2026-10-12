@@ -354,6 +354,10 @@ opacity: .8;
         flex: 1;
     }
 
+.menu-close-row .menu-back {
+    margin-right: 10px;
+}
+
 .menu-kbd {
     font-size: 11px;
     line-height: 16px;

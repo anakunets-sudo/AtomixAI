@@ -35,6 +35,7 @@
   "menu.selection": "选择集",
   "menu.commands": "命令",
   "menu.back": "返回",
+  "menu.close": "关闭",
   "menu.search": "搜索",
   "menu.search.placeholder": "搜索...",
   "menu.noResults": "无结果",

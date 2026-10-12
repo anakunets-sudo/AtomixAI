@@ -35,6 +35,7 @@
   "menu.selection": "Auswahl",
   "menu.commands": "Befehle",
   "menu.back": "Zurück",
+  "menu.close": "Schließen",
   "menu.search": "Suchen",
   "menu.search.placeholder": "Suchen...",
   "menu.noResults": "Keine Ergebnisse",

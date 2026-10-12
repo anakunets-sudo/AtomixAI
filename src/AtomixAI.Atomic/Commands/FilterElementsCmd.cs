@@ -110,6 +110,8 @@ namespace AtomixAI.Atomic.Commands
 
                 contract.Set(BimKeys.Elements.ElementIds, filteredIds);
 
+                AtomicStorage.Remove(BimKeys.Search.Collector); // Очистка временного хранилища
+
                 // Записываем результат обратно в AtomicStorage
                 return SetOutput(contract, filteredIds.Count, true, $"Filtered elements count: {filteredIds.Count}.");
             }
