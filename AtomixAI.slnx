@@ -1,9 +1,9 @@
 <Solution>
   <Configurations>
-    <BuildType Name="Debug2019" />
+    <BuildType Name="Debug2022" />
     <BuildType Name="Debug2026" />
     <BuildType Name="Debug2027" />
-    <BuildType Name="Release2019" />
+    <BuildType Name="Release2022" />
     <BuildType Name="Release2026" />
     <BuildType Name="Release2027" />
     <Platform Name="Any CPU" />
@@ -11,7 +11,7 @@
   </Configurations>
   <Folder Name="/assets/" />
   <Folder Name="/assets/Addins/">
-    <File Path="AtomixAI.2019.addin" />
+    <File Path="AtomixAI.2022.addin" />
     <File Path="AtomixAI.2026.addin" />
     <File Path="AtomixAI.2027.addin" />
   </Folder>
@@ -19,8 +19,8 @@
     <File Path="Directory.Build.props" />
   </Folder>
   <Project Path="src/AtomixAI.Atomic/AtomixAI.Atomic.csproj">
-    <BuildType Solution="Debug2019|*" Project="Debug2019" />
-    <BuildType Solution="Release2019|*" Project="Release2019" />
+    <BuildType Solution="Debug2022|*" Project="Debug2022" />
+    <BuildType Solution="Release2022|*" Project="Release2022" />
     <BuildType Solution="Debug2026|*" Project="Debug2026" />
     <BuildType Solution="Release2026|*" Project="Release2026" />
     <BuildType Solution="Debug2027|*" Project="Debug2027" />
@@ -29,8 +29,8 @@
     <Platform Solution="*|x64" Project="x64" />
   </Project>
   <Project Path="src/AtomixAI.Bridge/AtomixAI.Bridge.csproj">
-    <BuildType Solution="Debug2019|*" Project="Debug2019" />
-    <BuildType Solution="Release2019|*" Project="Release2019" />
+    <BuildType Solution="Debug2022|*" Project="Debug2022" />
+    <BuildType Solution="Release2022|*" Project="Release2022" />
     <BuildType Solution="Debug2026|*" Project="Debug2026" />
     <BuildType Solution="Release2026|*" Project="Release2026" />
     <BuildType Solution="Debug2027|*" Project="Debug2027" />
@@ -39,8 +39,8 @@
     <Platform Solution="*|x64" Project="x64" />
   </Project>
   <Project Path="src/AtomixAI.Core/AtomixAI.Core.csproj">
-    <BuildType Solution="Debug2019|*" Project="Debug2019" />
-    <BuildType Solution="Release2019|*" Project="Release2019" />
+    <BuildType Solution="Debug2022|*" Project="Debug2022" />
+    <BuildType Solution="Release2022|*" Project="Release2022" />
     <BuildType Solution="Debug2026|*" Project="Debug2026" />
     <BuildType Solution="Release2026|*" Project="Release2026" />
     <BuildType Solution="Debug2027|*" Project="Debug2027" />
@@ -49,8 +49,8 @@
     <Platform Solution="*|x64" Project="x64" />
   </Project>
   <Project Path="src/AtomixAI.Main/AtomixAI.Main.csproj">
-    <BuildType Solution="Debug2019|*" Project="Debug2019" />
-    <BuildType Solution="Release2019|*" Project="Release2019" />
+    <BuildType Solution="Debug2022|*" Project="Debug2022" />
+    <BuildType Solution="Release2022|*" Project="Release2022" />
     <BuildType Solution="Debug2026|*" Project="Debug2026" />
     <BuildType Solution="Release2026|*" Project="Release2026" />
     <BuildType Solution="Debug2027|*" Project="Debug2027" />
@@ -59,8 +59,8 @@
     <Platform Solution="*|x64" Project="x64" />
   </Project>
   <Project Path="src/AtomixAI.UI/AtomixAI.UI.csproj">
-    <BuildType Solution="Debug2019|*" Project="Debug2019" />
-    <BuildType Solution="Release2019|*" Project="Release2019" />
+    <BuildType Solution="Debug2022|*" Project="Debug2022" />
+    <BuildType Solution="Release2022|*" Project="Release2022" />
     <BuildType Solution="Debug2026|*" Project="Debug2026" />
     <BuildType Solution="Release2026|*" Project="Release2026" />
     <BuildType Solution="Debug2027|*" Project="Debug2027" />

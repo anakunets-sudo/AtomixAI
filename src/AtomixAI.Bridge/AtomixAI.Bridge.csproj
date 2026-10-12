@@ -10,7 +10,7 @@
 
     <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
     <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
+    <Configurations>Debug2022;Release2022;Debug2026;Release2026;Debug2027;Release2027</Configurations>
     
   </PropertyGroup>
 
@@ -24,8 +24,5 @@
   <ProjectReference Include="..\AtomixAI.Core\AtomixAI.Core.csproj" />
 </ItemGroup>
 
-<ItemGroup>
-  <PackageReference Update="Autodesk.Revit.Sdk.Refs.2019" Version="1.2.0" />
-</ItemGroup>
 
 </Project>

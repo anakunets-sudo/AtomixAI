@@ -24,6 +24,7 @@ with open(LOG_FILE, "w", encoding="utf-8") as f:
     f.write(f"--- NEW SESSION: {time.ctime()} ---\n")
 
 def log(msg):
+    """Записывает сообщение с временем в лог и выводит его в консоль."""
     # Добавляем параметр encoding="utf-8", чтобы смайлики не ломали лог
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{time.strftime('%H:%M:%S')} | {msg}\n")
@@ -33,6 +34,7 @@ def log(msg):
         print(msg)
     except UnicodeEncodeError:
         print(msg.encode('utf-8', errors='ignore').decode('utf-8'))
+
 
 log(f"REVIT PYTHON VERSION: {sys.version}")
 log("[*] Checking dependencies...")
@@ -79,7 +81,6 @@ def load_providers():
         log(f"[!] providers.json: {ex}")
     return active, cfg
 
-
 def _registry_env(name):
     """Свежие значения из реестра User/Machine (без перезапуска Revit)."""
     try:
@@ -96,13 +97,11 @@ def _registry_env(name):
             continue
     return ""
 
-
 # legacy: `python orchestrator.py --api-key ...` продолжает работать
 _parser = argparse.ArgumentParser(add_help=False)
 _parser.add_argument("--api-key", dest="api_key", default=None)
 _cli_args, _ = _parser.parse_known_args()
 CLI_API_KEY = (_cli_args.api_key or "").strip()
-
 
 def resolve_provider_key(provider):
     """--api-key (legacy) -> env -> реестр User/Machine -> api_key в providers.json."""
@@ -114,12 +113,10 @@ def resolve_provider_key(provider):
             return src.strip()
     return ""
 
-
 ACTIVE_NAME, PROVIDERS = load_providers()
 MODEL_NAME = PROVIDERS[ACTIVE_NAME]["model"]
 FULL_URL = PROVIDERS[ACTIVE_NAME]["base_url"]
 API_KEY = resolve_provider_key(PROVIDERS[ACTIVE_NAME])
-
 
 def use_provider(name):
     """Глобальный переключатель провайдера — вызывать из любого места кода."""
@@ -136,7 +133,6 @@ def use_provider(name):
         log(f"[!] {provider.get('api_key_env')} is empty — setx it or add 'api_key' to providers.json")
     log(f"[*] Provider -> {name} ({MODEL_NAME})")
     return True
-
 
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
@@ -230,13 +226,14 @@ bim_sequence_tool = {
     }
 }
 
-
 class RevitPipeClient:
     def __init__(self, name):
+        """Сохраняет имя канала для обмена данными с Revit."""
         self.name = name
         self.handle = None
 
     def connect(self):
+        """Ожидает доступности Named Pipe и подключается к Revit."""
         print(f"[*] Connecting to Revit ({self.name})...")
         while True:
             try:
@@ -249,6 +246,7 @@ class RevitPipeClient:
                 time.sleep(1)
 
     def send_receive(self, payload):
+        """Отправляет JSON в Revit и возвращает ответ и событие интерфейса."""
         try:
             win32file.WriteFile(self.handle, (json.dumps(payload) + "\n").encode('utf-8'))
             _, data = win32file.ReadFile(self.handle, 65536)
@@ -268,6 +266,7 @@ class RequestAborted(Exception):
     pass
 
 def _is_abort_event(event, generation=0):
+    """Проверяет, относится ли событие отмены к текущему запросу."""
     if not isinstance(event, dict):
         return False
     if event.get("action") not in ("abort", "stop"):
@@ -279,12 +278,13 @@ def _is_abort_event(event, generation=0):
     return True
 
 def raise_if_abort(event, generation=0):
+    """Прерывает обработку при получении отмены текущего запроса."""
     if _is_abort_event(event, generation):
         log("[!] Abort received. Current request will not be answered.")
         raise RequestAborted()
 
 def exchange(client, payload, generation=0):
-    """send_receive, который не выбрасывает abort/stop, пришедшие вместе с ответом."""
+    """Обменивается данными с Revit и прерывает запрос при отмене."""
     result, ui_event = client.send_receive(payload)
     raise_if_abort(ui_event, generation)
     if isinstance(result, dict) and result.get("status") == "aborted":
@@ -308,6 +308,7 @@ def clear_history():
 clear_history()
 
 def save_history(history):
+    """Сохраняет последние пять сообщений пользователя и ассистента в JSON."""
     try:
         # Храним только User и Assistant (без системных промптов)
         to_save = [m for m in history if m.get('role') in ['user', 'assistant']]
@@ -321,6 +322,7 @@ def save_history(history):
         log(f"[!] Error saving history: {e}")
 
 def load_history():
+    """Загружает историю из JSON или возвращает пустой список."""
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -332,6 +334,7 @@ def load_history():
     return []
 
 def extract_summary(data_obj):
+    """Извлекает количество результатов и список тегов для краткого отчета."""
     count = data_obj.get("total_success") or data_obj.get("count") or "0"
     tags_dict = data_obj.get("tags") or {}
     tag_list = list(tags_dict.keys())
@@ -347,6 +350,7 @@ MAX_FLOOD_ATTEMPTS = 2  # 1 — раз дает пофлудить или неп
 
 class ContextStateManager:
     def __init__(self):
+        """Создает состояние уточнений запроса и счетчик флуда."""
         #self.active_tool = None
         self.active_param = None  # Например, "filter_elements:Categories"
         #self.active_param_hint = None   # Человеческая подсказка
@@ -354,11 +358,13 @@ class ContextStateManager:
         self.user_steps = []            # ХРОНОЛОГИЯ ШАГОВ ПОЛЬЗОВАТЕЛЯ [origin, refinement_1, ...]
 
     def set_context(self, param_name):
+        """Фиксирует параметр, который пользователь должен уточнить."""
         #self.active_tool = tool
         self.active_param = param_name
         #self.active_param_hint = param_hint     
 
     def clear(self):
+        """Сбрасывает ожидаемый параметр, счетчик флуда и историю уточнений."""
         #self.active_tool = None
         self.active_param = None
         #self.active_param_hint = None
@@ -403,6 +409,7 @@ def _sequence_has_context_param(sequence, context_tag):
     return False
 
 def execute_eviction_protocol(user_text, detected_lang, headers):
+    """Запрашивает у ИИ сообщение об отмене задачи из-за флуда."""
     eviction_rules = (
         f"<TRANSACTION_EVICTION_PROTOCOL>\n"
         f"<AGENT_STATE_DIRECTIVES>\n"
@@ -439,6 +446,7 @@ def execute_eviction_protocol(user_text, detected_lang, headers):
         return f"System Error: Network connection failed during eviction processing."
 
 def process_ai_logic(user_text, client, generation=0):
+    """Получает план ИИ, обрабатывает уточнения, отправляет команды в Revit и формирует ответ."""
     global chat_history, detected_lang, dynamic_manual, bim_sequence_tool
 
     use_provider("teamorouter")
@@ -470,7 +478,7 @@ def process_ai_logic(user_text, client, generation=0):
         current_session = [{
             'role': 'system',
             'content': [
-                {"type": "string", "text": system_rules},
+                {"type": "test", "text": system_rules},
                 {"type": "text", "text": tools_manifest, "cache_control": {"type": "ephemeral"}},
             ]
         }]
@@ -529,7 +537,8 @@ def process_ai_logic(user_text, client, generation=0):
         res_context, _ = exchange(client, {"action": "get_context_state"}, generation)           
         if not res_context or not isinstance(res_context, dict):
             res_context = {}
-        current_tags = res_context.get("tags", "There are no active tags in memory.")    
+        current_tags = res_context.get("tags", "There are no active tags in memory.")
+        recent_user_tags = res_context.get("recent_user_tags", "")
         log(f"[***] Теги:{current_tags}")
 
 
@@ -540,6 +549,10 @@ def process_ai_logic(user_text, client, generation=0):
             f"<ACTIVE_REVIT_MEMORY_TAGS>\n"
             f"{current_tags}\n"
             f"</ACTIVE_REVIT_MEMORY_TAGS>\n"
+            \
+            f"<RECENT_USER_TAGS>\n"
+            f"{recent_user_tags}\n"
+            f"</RECENT_USER_TAGS>\n"
             \
             f"<TRACKING_AND_INCREMENTATION_RULES>\n"
             f"1. The tags inside <ACTIVE_REVIT_MEMORY_TAGS> represent elements currently existing in the Revit project.\n"
@@ -612,37 +625,12 @@ def process_ai_logic(user_text, client, generation=0):
         # Отмена могла прийти, пока ждали план. Не выполняем sequence и не отвечаем в чат.
         exchange(client, {"action": "ping"}, generation)
     
-                # -----------------------------------------------------------------
-        # ШАГ 4. СЦЕНАРИЙ А: ПОЛЬЗОВАТЕЛЬ ПРОСТО БОЛТАЕТ (SMALL TALK / FLOOD)
+        # -----------------------------------------------------------------
+        # ШАГ 4. СЦЕНАРИЙ А: ОТВЕТ БЕЗ ВЫЗОВА ФУНКЦИИ
         # -----------------------------------------------------------------
         if "tool_calls" not in message_node or not message_node["tool_calls"]:
-            log("[*] AI chose SMALL TALK.")
-            raw_content = message_node["content"]
-
-            log(f"[DEBUG] СЦЕНАРИЙ А")       
-
-            session_state.flood_count += 1
-            log(f"[FLOOD] Inside context tracker: {session_state.flood_count}/{MAX_FLOOD_ATTEMPTS}")         
-            
-            # Если болтовня происходит внутри открытого замка контекста
-            if session_state.active_param not in [None,""] or len(session_state.user_steps) > 1:   
-                # КРАСНАЯ КАРТОЧКА: Превышен лимит попыток — принудительная отмена задачи
-                if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
-                    log(f"[-] Flood limit blown. Dropping context dynamically via Gemini: {session_state.active_param}")
-                    
-                    # Полный сброс параметров на бэкенде — задача официально закрыта
-                    session_state.clear()
-                    
-                    return execute_eviction_protocol(user_text, detected_lang, headers)
-                
-            ai_user_msg = ""            
-            if raw_content:
-                try:
-                    content_json = json.loads(raw_content)
-                    ai_user_msg = content_json.get("user_facing_message", "").strip()
-                except (json.JSONDecodeError, AttributeError):
-                    ai_user_msg = raw_content.strip()
-            return ai_user_msg or "Please clarify your request."
+            log("[!] Scenario A: AI response has no tool_calls.")
+            return "Please clarify your request."
 
         # -----------------------------------------------------------------
         # ШАГ 2. СЦЕНАРИЙ Б: ИИ СГЕНЕРИРОВАЛ ВЫЗОВ ФУНКЦИИ
@@ -912,6 +900,7 @@ def process_ai_logic(user_text, client, generation=0):
         return f"System Error: {str(e)}"
 
 def main():
+    """Подключается к Revit и обрабатывает запросы чата в цикле событий."""
     client = RevitPipeClient(PIPE_NAME)
     if not client.connect(): return
 

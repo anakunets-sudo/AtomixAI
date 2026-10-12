@@ -13,9 +13,13 @@ namespace AtomixAI.Core
     public static class AtomicStorage
     {
         private static readonly Dictionary<string, StorageSlot> _data = new Dictionary<string, StorageSlot>(StringComparer.OrdinalIgnoreCase);
-        private static readonly List<string> _history = new List<string>();
+        // Служебный порядок записи всех тегов (для GetLastTag и вытеснения по ёмкости).
+        private static readonly List<string> _recentTags = new List<string>();
+        // Финальные теги успешных операций, имеющие смысл для пользователя (меню Recent). Новые сверху.
+        private static readonly List<string> _userTags = new List<string>();
         private static readonly object _lockObj = new object();
         public static int MaxCapacity { get; set; } = 1000;
+        public static int MaxUserTags { get; set; } = 100;
         //private const string LAST_KEY = "#_last";
 
         // --- ТОТ САМЫЙ МЕТОД ДЛЯ TRANSACTION MANAGER ---
@@ -25,6 +29,36 @@ namespace AtomixAI.Core
             {
                 // Возвращаем все ключи (алиасы), которые сейчас есть в словаре
                 return _data.Keys.ToArray();
+            }
+        }
+
+        // Тег последней успешно зафиксированной операции (null, если ещё ничего не было).
+        public static string? GetLastTag()
+        {
+            lock (_lockObj)
+            {
+                return _recentTags.Count > 0 ? _recentTags[_recentTags.Count - 1] : null;
+            }
+        }
+
+        // Фиксирует финальный тег успешной цепочки как «пользовательский» (для меню Recent).
+        public static void MarkUserTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) return;
+            lock (_lockObj)
+            {
+                _userTags.Remove(tag);
+                _userTags.Insert(0, tag);
+                if (_userTags.Count > MaxUserTags) _userTags.RemoveAt(_userTags.Count - 1);
+            }
+        }
+
+        // Теги для меню Recent: новые сверху, старые ниже.
+        public static string[] GetUserTags()
+        {
+            lock (_lockObj)
+            {
+                return _userTags.ToArray();
             }
         }
 
@@ -44,7 +78,7 @@ namespace AtomixAI.Core
                 _data[tag] = newSlot;
                 //_data[LAST_KEY] = newSlot;
 
-                UpdateHistory(tag);
+                TrackRecentTag(tag);
                 CheckCapacity();
             }
         }
@@ -58,7 +92,7 @@ namespace AtomixAI.Core
                 {
                     slot.Tags.Add(targetTag);
                     _data[targetTag] = slot;
-                    UpdateHistory(targetTag);
+                    TrackRecentTag(targetTag);
                 }
             }
         }
@@ -86,27 +120,27 @@ namespace AtomixAI.Core
                     foreach (var linkedName in slot.Tags.ToList())
                     {
                         _data.Remove(linkedName);
-                        _history.Remove(linkedName);
+                        _recentTags.Remove(linkedName);
                     }
                     slot.Value = null;
                 }
             }
         }
 
-        private static void UpdateHistory(string tag)
+        private static void TrackRecentTag(string tag)
         {
-            _history.Remove(tag);
-            _history.Add(tag);
+            _recentTags.Remove(tag);
+            _recentTags.Add(tag);
         }
 
         private static void CheckCapacity()
         {
-            while (_history.Count > MaxCapacity) Remove(_history[0]);
+            while (_recentTags.Count > MaxCapacity) Remove(_recentTags[0]);
         }
 
         public static void Clear()
         {
-            lock (_lockObj) { _data.Clear(); _history.Clear(); }
+            lock (_lockObj) { _data.Clear(); _recentTags.Clear(); _userTags.Clear(); }
         }
     }
 }

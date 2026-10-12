@@ -102,6 +102,7 @@ namespace AtomixAI.Core
 
                         // 4. ФИКСАЦИЯ: Если всё отлично
                         handler.Assimilate();
+                        AtomicStorage.MarkUserTag(finalResult?.ResultTag ?? AtomicStorage.GetLastTag());
                         return finalResult;
                     }
                     catch (Exception ex)

@@ -190,8 +190,8 @@ namespace AtomixAI.Atomic.Commands
                         // Применяем регистронезависимое сравнение строк средствами .NET
                         return op switch
                         {
-                            "contains" => actualValue.Contains(aiValueStr, StringComparison.OrdinalIgnoreCase),
-                            "not_contains" => !actualValue.Contains(aiValueStr, StringComparison.OrdinalIgnoreCase),
+                            "contains" => actualValue.IndexOf(aiValueStr, StringComparison.OrdinalIgnoreCase) >= 0,
+                            "not_contains" => actualValue.IndexOf(aiValueStr, StringComparison.OrdinalIgnoreCase) < 0,
                             "begins" => actualValue.StartsWith(aiValueStr, StringComparison.OrdinalIgnoreCase),
                             "not_begins" => !actualValue.StartsWith(aiValueStr, StringComparison.OrdinalIgnoreCase),
                             "ends" => actualValue.EndsWith(aiValueStr, StringComparison.OrdinalIgnoreCase),
@@ -210,7 +210,7 @@ namespace AtomixAI.Atomic.Commands
         }
 
 
-        public Tuple<Parameter, bool> FindElementsWithParameterUltraFast(Autodesk.Revit.DB.Document doc, List<ElementId> inputIds, string parameterName)
+        public Tuple<Parameter, bool>? FindElementsWithParameterUltraFast(Autodesk.Revit.DB.Document doc, List<ElementId> inputIds, string parameterName)
         {
             if (inputIds == null || inputIds.Count == 0) return null;
 
@@ -253,7 +253,7 @@ namespace AtomixAI.Atomic.Commands
             // Самый дешевый способ вытащить категории через ELEM_CATEGORY_PARAM:
 
             var uniqueCategoryIds = mainCollector
-                .Select(el => provider.GetElementIdValue(el))?
+                .Select(el => provider.GetElementIdValue(el))
                 .Where(id => id != null && id != ElementId.InvalidElementId)
                 .Distinct()
                 .ToList();
@@ -294,14 +294,13 @@ namespace AtomixAI.Atomic.Commands
             return null;
         }
 
-        private Parameter GetParameterByEnglishName(string parameterName, ParameterSet set)
+        private Parameter? GetParameterByEnglishName(string parameterName, ParameterSet set)
         {
             foreach (Parameter p in set)
             {
                 string englishNameFromDefinition;
 
-                // Заставляем Revit сказать, как этот параметр называется на АНГЛИЙСКОМ 
-                // (даже если у пользователя сейчас немецкий или русский Revit)
+                // Resolve built-in parameter labels in English on all supported Revit versions.
 #if REVIT2024_OR_GREATER
                 englishNameFromDefinition = LabelUtils.GetLabelFor((BuiltInParameter) p.Id.Value, LanguageType.English_USA);
 #else

@@ -97,7 +97,7 @@ namespace AtomixAI.Atomic.Commands
             var words = Regex.Replace(scope, @"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ").ToLower();
 
             // Передаем плоский список List<ElementId> в AtomicStorage под тегом Out!
-            return SetOutput(contract, count, true, $"IMPORTANT for FINAL report: initialized {words} scope.");
+            return SetOutput(contract, count, true, $"IMPORTANT: initialized {words} scope.");
         }
     }
 }

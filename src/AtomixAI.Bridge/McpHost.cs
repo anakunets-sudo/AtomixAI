@@ -199,7 +199,7 @@ namespace AtomixAI.Bridge
                     return JsonConvert.SerializeObject(new { manual = Registry.GetAiManual() });
 
                 if (action == "get_context_state")
-                    return JsonConvert.SerializeObject(new { tags = Registry.GetActiveContentStateTags() });
+                    return JsonConvert.SerializeObject(new { tags = Registry.GetActiveContentStateTags(), recent_user_tags = Registry.GetRecentUserTagsState() });
 
                 // НОВЫЙ КЕЙС: Ответ от ИИ для интерфейса
                 if (action == "ui_log")

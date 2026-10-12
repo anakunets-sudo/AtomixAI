@@ -12,7 +12,7 @@
     <GenerateTargetPlatformAttribute>false</GenerateTargetPlatformAttribute>
     <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
     <RootNamespace>AtomixAI.Main</RootNamespace>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
+    <Configurations>Debug2022;Release2022;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <!-- Общие зависимости -->
@@ -26,13 +26,13 @@
     <!-- Здесь можно добавить ссылку на Revit API 2025/2026 через NuGet -->
   </ItemGroup>
 
-  <!-- Специфичные зависимости для Revit 2019 (.NET 4.8) -->
+  <!-- Специфичные зависимости для Revit 2022 (.NET 4.8) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <!-- Используем стабильную версию для старого .NET -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Configuration" />
-    <!-- Здесь можно добавить ссылку на Revit API 2019 через NuGet -->
+    <!-- Revit API references are provided by Directory.Build.props. -->
   </ItemGroup>
 
   <ItemGroup>

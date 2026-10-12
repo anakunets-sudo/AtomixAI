@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "AtomixAI: Revit 2027",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build AtomixAI.Main (Revit 2027)",
+            "program": "C:\\Program Files\\Autodesk\\Revit 2027\\Revit.exe",
+            "cwd": "C:\\Program Files\\Autodesk\\Revit 2027\\",
+            "stopAtEntry": false
+        },
+        {
+            "name": "AtomixAI: Revit 2026",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build AtomixAI.Main (Revit 2026)",
+            "program": "C:\\Program Files\\Autodesk\\Revit 2026\\Revit.exe",
+            "cwd": "C:\\Program Files\\Autodesk\\Revit 2026\\",
+            "stopAtEntry": false
+        }
+    ]
+}

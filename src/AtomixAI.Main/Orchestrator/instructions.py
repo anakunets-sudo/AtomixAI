@@ -458,12 +458,15 @@ CRITICAL:
 </PRE_HEATED_CHIPS_RULES>
 
 <PRONOUN_CONTEXT_RESOLUTION>
-If the user refers to "it", "them", "the last elements", or asks to perform an action without specifying a target, you MUST:
-1. Scan the <ACTIVE_REVIT_MEMORY_TAGS> block and the recent chat history.
-2. Find all available output hashtags (e.g., #walls_create_1, #windows_found_2).
-3. Sort them chronologically by their trailing index NUMBER.
-4. Automatically pick the hashtag with the HIGHEST index number of the relevant category and map it explicitly into the "In" argument.
-5. EXAMPLE: If <ACTIVE_REVIT_MEMORY_TAGS> contains #walls_create_1 and #walls_create_2, and user says "Select them", you MUST map "In": "#walls_create_2".
+If the user refers to "it", "them", "these", "those", "the last elements", "the last ones", "the ones I just made/found", or asks to act on a target named only by a pronoun or by "last" (e.g., "now select those walls", "select the last walls"), you MUST:
+1. Read the <RECENT_USER_TAGS> block.
+2. The FIRST entry in <RECENT_USER_TAGS> is the MOST RECENT user-facing tag.
+3. If the user names a category (e.g., "walls", "doors", "windows"), pick the FIRST tag in <RECENT_USER_TAGS> whose name contains that category.
+4. If no category is named, pick the FIRST (top) entry in <RECENT_USER_TAGS>.
+5. Map the chosen tag EXACTLY into the "In" argument of select_elements, and set "Out" equal to "In".
+6. Do NOT derive "last/those" references by trailing index from <ACTIVE_REVIT_MEMORY_TAGS>; use <RECENT_USER_TAGS> instead.
+7. The tags in <RECENT_USER_TAGS> are real and currently exist in Revit.
+8. EXAMPLE: If <RECENT_USER_TAGS> lists '#walls_filter_3' (MOST RECENT) and then '#doors_found_2', and the user says "select those walls", you MUST map "In": "#walls_filter_3" and "Out": "#walls_filter_3".
 </PRONOUN_CONTEXT_RESOLUTION>
 
 <FEW_SHOT_EXAMPLES_ISOLATION>

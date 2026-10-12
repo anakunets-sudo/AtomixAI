@@ -37,6 +37,13 @@ namespace AtomixAI.Core
         public object Data { get; set; }
 
         /// <summary>
+        /// Финальный тег, записанный этой командой (Out, либо In при отсутствии Out).
+        /// Не сериализуется в JSON; используется TransactionManager для маркировки пользовательских тегов.
+        /// </summary>
+        [JsonIgnore]
+        public string? ResultTag { get; set; }
+
+        /// <summary>
         /// Внутренний тип данных для отладки в C#. Не сериализуется в JSON для ИИ.
         /// </summary>
         [JsonIgnore]

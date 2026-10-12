@@ -28,7 +28,7 @@ namespace AtomixAI.UI.Commands
                 });
             }
 
-            var items = AtomicStorage.GetCurrentContext()
+            var items = AtomicStorage.GetUserTags()
                 .Select(tag =>
                 {
                     string alias = tag.StartsWith("#", StringComparison.Ordinal) ? tag : $"#{tag}";

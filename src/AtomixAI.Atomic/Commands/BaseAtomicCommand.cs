@@ -131,7 +131,8 @@ namespace AtomixAI.Atomic.Commands
             {
                 Success = success,
                 Data = finalDataForAi,
-                Message = message ?? (success ? "Success" : "Operation failed"),                
+                Message = message ?? (success ? "Success" : "Operation failed"),
+                ResultTag = activeTag
             };
         }
 

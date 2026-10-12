@@ -318,5 +318,23 @@ using System.Text.RegularExpressions;
             }
             return sb.ToString().TrimEnd();
         }
+
+        /// <summary>
+        /// Упорядоченный список пользовательских тегов (новые сверху) для блока <RECENT_USER_TAGS>.
+        /// </summary>
+        public static string GetRecentUserTagsState()
+        {
+            string[] tags = AtomicStorage.GetUserTags();
+
+            if (tags == null || tags.Length == 0)
+                return "RECENT USER TAGS: [empty]";
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < tags.Length; i++)
+            {
+                sb.Append($"- '{tags[i]}'{(i == 0 ? "  (MOST RECENT)" : "")}\n");
+            }
+            return sb.ToString().TrimEnd();
+        }
     }
 }

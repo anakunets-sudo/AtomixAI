@@ -6,7 +6,7 @@
     
     <!-- Для работы с Revit UI элементами, если понадобятся -->
     <UseWPF>false</UseWPF>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
+    <Configurations>Debug2022;Release2022;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <ItemGroup>

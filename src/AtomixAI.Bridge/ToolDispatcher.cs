@@ -55,6 +55,7 @@ namespace AtomixAI.Bridge
             var isPromptOverride = false;
             var metadataCollector = new Dictionary<string, object>();
             int successCount = 0;
+            string? lastResultTag = null;
 
             try
             {
@@ -113,6 +114,10 @@ namespace AtomixAI.Bridge
                             };
                         }
 
+                        // Финальный тег цепочки = Out последнего успешного шага.
+                        if (!string.IsNullOrEmpty(stepResult.ResultTag))
+                            lastResultTag = stepResult.ResultTag;
+
                         successCount++;
                     }
 
@@ -126,7 +131,8 @@ namespace AtomixAI.Bridge
                             total_success = successCount,
                             tags = metadataCollector,
                             status = "Completed"
-                        }
+                        },
+                        ResultTag = lastResultTag
                     };
 
                     if (isPromptOverride)

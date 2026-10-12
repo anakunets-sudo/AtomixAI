@@ -4,7 +4,7 @@
     <Version>1.0.0</Version>
     <LangVersion>latest</LangVersion>
     <Platforms>x64</Platforms>
-    <Configurations>Debug2019;Release2019;Debug2026;Release2026;Debug2027;Release2027</Configurations>
+    <Configurations>Debug2022;Release2022;Debug2026;Release2026;Debug2027;Release2027</Configurations>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2026|x64'">
@@ -19,7 +19,7 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2019|x64'">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug2022|x64'">
     <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
     <Optimize>false</Optimize>
     <DebugSymbols>true</DebugSymbols>
@@ -28,7 +28,7 @@
   <!-- 2. Логика только для C# проектов (.csproj) -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
     <!-- Извлекаем версию Revit -->
-    <RevitVersion Condition="$(Configuration.Contains('2019'))">2019</RevitVersion>
+    <RevitVersion Condition="$(Configuration.Contains('2022'))">2022</RevitVersion>
     <RevitVersion Condition="$(Configuration.Contains('2025'))">2025</RevitVersion>
     <RevitVersion Condition="$(Configuration.Contains('2026'))">2026</RevitVersion>
     <RevitVersion Condition="$(Configuration.Contains('2027'))">2027</RevitVersion>

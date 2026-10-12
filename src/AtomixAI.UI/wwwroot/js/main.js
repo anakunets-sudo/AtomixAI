@@ -10,6 +10,29 @@ let isWorking = false;
 let chatTurn = 0;
 let cancelledTurn = 0;
 
+// Прокрутка чата к последнему сообщению. Повторяем в следующем кадре и
+// коротким таймаутом: после вставки содержимого (markdown, иконки рейтинга,
+// подгрузка истории) высота сообщения может вырасти уже после синхронного
+// присвоения scrollTop, из-за чего низ оставался за кадром.
+function scrollChatToBottom() {
+    if (!chatContainer) return;
+    const jump = () => { chatContainer.scrollTop = chatContainer.scrollHeight; };
+    jump();
+    requestAnimationFrame(jump);
+    setTimeout(jump, 0);
+}
+
+// Любое изменение списка сообщений (новый пузырь, замена "думаю" ответом,
+// загрузка истории, стриминг текста) автоматически прокручивает чат вниз.
+if (chatContainer && typeof MutationObserver !== 'undefined') {
+    const chatObserver = new MutationObserver(() => scrollChatToBottom());
+    chatObserver.observe(chatContainer, {
+        childList: true,
+        subtree: true,
+        characterData: true
+    });
+}
+
 // Одна строка при пустом поле и при тексте. 42px после отправки поднимало блок:
 // плейсхолдер оказывался над кнопками, а набранный текст — в один ряд с ними.
 function resizeInputField() {
@@ -104,7 +127,7 @@ function toggleVoice() {
         msgDiv.className = 'msg ai listening-state';
         msgDiv.innerHTML = listenHtml;
         chatContainer.appendChild(msgDiv);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        scrollChatToBottom();
     } else {
         // Возврат в режим ожидания
         micBtn.style.removeProperty('background');
@@ -265,7 +288,7 @@ function handleAIResponse(data) {
         const label = msgEl && msgEl.querySelector('.thinking-label');
         if (label && data.content) {
             label.textContent = data.content;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            scrollChatToBottom();
         }
         return;
     }
@@ -278,6 +301,7 @@ function handleAIResponse(data) {
             renderMessageContent(msgEl, data.content);
             initAliasButtons(msgEl);
             addRating(msgEl);
+            scrollChatToBottom();
         }
         thinkingMsgId = null;
     } else {
@@ -297,7 +321,7 @@ function appendThinkingMessage() {
  <a class="cancel-btn-link" onclick="cancelAction()">${window.Atomix.t('chat.cancel', 'Cancel')}</a>
  `;
     chatContainer.appendChild(msgDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollChatToBottom();
     return id;
 }
 
@@ -315,6 +339,7 @@ function cancelAction() {
         thinkingMsgId = null;
     }
     setBusy(false);
+    scrollChatToBottom();
 }
 
 function setBusy(busy) {
@@ -335,7 +360,7 @@ function appendMessage(role, text, withRating = false) {
     // Добавляем рейтинг, если это ИИ
     if (withRating && role === 'ai') addRating(msgDiv);
     chatContainer.appendChild(msgDiv);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    scrollChatToBottom();
     return id;
 }
 // Вынесем инициализацию кнопок в отдельную функцию для удобства
