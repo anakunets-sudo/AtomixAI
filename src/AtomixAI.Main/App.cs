@@ -34,6 +34,7 @@ namespace AtomixAI.Main
                 string i18nDir = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "wwwroot", "i18n");
                 var uiCulture = System.Threading.Thread.CurrentThread.CurrentUICulture;
                 AtomixAI.Core.Localizer.Initialize(i18nDir, uiCulture);
+                application.ControlledApplication.DocumentClosed += OnDocumentClosed;
                 Debug.WriteLine($"[i18n] CurrentUICulture={uiCulture.Name}, loaded={AtomixAI.Core.Localizer.Language}");
 
                 //if (!System.Diagnostics.Debugger.IsAttached)
@@ -150,6 +151,8 @@ namespace AtomixAI.Main
         }
         public Result OnShutdown(UIControlledApplication application)
         {
+            application.ControlledApplication.DocumentClosed -= OnDocumentClosed;
+            AtomixAI.Core.ChipStorage.Shared.Clear();
             _mcpHost?.Stop();
             StopVocalSyncServer();
             try
@@ -161,6 +164,10 @@ namespace AtomixAI.Main
             { /* Handle exit race conditions */
             }
             return Result.Succeeded;
+        }
+        private void OnDocumentClosed(object? sender, Autodesk.Revit.DB.Events.DocumentClosedEventArgs e)
+        {
+            AtomixAI.Core.ChipStorage.Shared.Clear();
         }
         private void CreateRibbon(UIControlledApplication a)
         {

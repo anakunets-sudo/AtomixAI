@@ -16,14 +16,15 @@
   "chat.cancel": "Annuler",
   "chat.cancelled": "Annulé par l’utilisateur",
 
-  "input.placeholder": "Discuter avec Livvy, '#' pour le menu",
+  "input.placeholder": "Discuter avec Livvy, # pour le menu",
+  "input.menu": "Ouvrir le menu",
   "input.voice": "Saisie vocale",
   "input.send": "Envoyer [Enter]",
 
   "footer.settings": "Afficher les paramètres d’environnement",
   "footer.aiCore": "Moteur IA :",
   "footer.aiModel": "Modèle IA :",
-  "footer.modelName": "Google Gemini",
+  "footer.modelName": "Anthropic",
 
   "rate.markSolution": "Marquer comme solution",
   "rate.markedSolution": "Marqué comme solution",
@@ -32,6 +33,7 @@
 
   "menu.recent": "Récents",
   "menu.tags": "Étiquettes",
+  "menu.modelData": "Données du modèle",
   "menu.selection": "Sélection",
   "menu.commands": "Commandes",
   "menu.back": "Retour",

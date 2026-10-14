@@ -13,17 +13,20 @@ namespace AtomixAI.UI.Commands.Selection
         public static List<object> Build(UIDocument uiDoc)
         {
             Document doc = uiDoc.Document;
-            var items = new List<object>();
+            var items = new List<object>
+            {
+                new
+                {
+                    id = SelectionMenuIds.PickInView,
+                    name = MenuResponse.Label("🎯", Localizer.T("selection.pickInView")),
+                    hasChildren = true,
+                    isPinnedAction = true
+                }
+            };
 
             var selectedIds = uiDoc.Selection.GetElementIds();
             if (selectedIds.Count == 0)
             {
-                items.Add(new
-                {
-                    id = SelectionMenuIds.PickInView,
-                    name = MenuResponse.Label("🎯", Localizer.T("selection.pickInView")),
-                    hasChildren = true
-                });
                 return items;
             }
 

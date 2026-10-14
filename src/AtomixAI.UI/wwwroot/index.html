@@ -112,13 +112,12 @@
             <input id="menu-search-input" type="text" placeholder="Search..." data-i18n-placeholder="menu.search.placeholder" autocomplete="off" spellcheck="false" />
             <button type="button" id="menu-search-btn" class="menu-search-btn" aria-label="Search" data-i18n-aria="menu.search" data-tooltip="Search" data-i18n-tooltip="menu.search">&#xE721;</button>
         </div>
+        <div id="menu-pinned-action"></div>
         <div id="menu-items"></div>
     </div>
 
     <div class="input-area">
-        <button id="micBtn" class="icon-btn" aria-label="Voice" onclick="toggleVoice()" data-tooltip="Voice input" data-i18n-tooltip="input.voice" data-i18n-aria="input.voice">
-            <span id="micIcon"></span>
-        </button>
+        <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="Open menu" onclick="openMenu()" data-tooltip="Open menu" data-i18n-tooltip="input.menu" data-i18n-aria="input.menu">#</button>
         <div class="ctr-userInput">
             <!--<textarea rows="1" id="userInput" placeholder="Describe sequence... [Enter to send]"></textarea>-->
             <div id="userInput"
@@ -126,6 +125,9 @@
                  placeholder="Describe sequence... [Enter to send]"
                  data-i18n-placeholder="input.placeholder"></div>
 
+            <button id="micBtn" class="icon-btn" aria-label="Voice" onclick="toggleVoice()" data-tooltip="Voice input" data-i18n-tooltip="input.voice" data-i18n-aria="input.voice">
+                <span id="micIcon"></span>
+            </button>
             <button id="sendBtn" class="icon-btn send-btn" aria-label="Send" onclick="sendMessage()" data-tooltip="Send" data-i18n-tooltip="input.send" data-i18n-aria="input.send">
                 <span style="font-size: 16px; margin: 0 0 0 -3px; transform: scaleY(1.1);"></span>
             </button>

@@ -229,9 +229,22 @@ namespace AtomixAI.Main.UI
                             lock (_uiHandler.UiCommandQueue)
                             {
                                 // Складываем в UI-очередь и будим UI ExternalEvent
-                                _uiHandler.UiCommandQueue.Enqueue(("GET_SUB_CONTEXT", subId));
+                                _uiHandler.UiCommandQueue.Enqueue(("GET_SUB_CONTEXT", subId!, string.Empty));
                             }
                             _uiExEvent.Raise(); // Будим выделенный поток Revit для UI
+                        }
+                        break;
+
+                    case "CREATE_CHIP":
+                        string parameterId = request["payload"]?["id"]?.ToString();
+                        string chipRequestId = request["payload"]?["requestId"]?.ToString();
+                        if (!string.IsNullOrEmpty(parameterId) && !string.IsNullOrEmpty(chipRequestId))
+                        {
+                            lock (_uiHandler.UiCommandQueue)
+                            {
+                                _uiHandler.UiCommandQueue.Enqueue(("CREATE_CHIP", parameterId!, chipRequestId!));
+                            }
+                            _uiExEvent.Raise();
                         }
                         break;
 
@@ -249,27 +262,31 @@ namespace AtomixAI.Main.UI
                         if (payload != null)
                         {
                             string prompt = payload["prompt"]?.ToString();
-                            var context = payload["context"] as Newtonsoft.Json.Linq.JArray;
-
-                            // 2. ДИНАМИЧЕСКИЙ ПРОГРЕВ ХРАНИЛИЩА (Только если чипсы были переданы)
-                            if (context != null && context.Count > 0)
+                            if (string.IsNullOrWhiteSpace(prompt))
                             {
-                                foreach (var chipToken in context)
-                                {
-                                    string alias = chipToken["alias"]?.ToString(); // Извлекаем хэштег, например "#Высота"
+                                ChipStorage.Shared.DiscardPending();
+                                break;
+                            }
 
-                                    if (!string.IsNullOrEmpty(alias))
-                                    {
-                                        // Кладём в AtomicStorage весь JSON-паспорт чипса целиком в виде JObject.
-                                        // ИИ никогда не увидит эти внутренности, но ToolDispatcher распакует их при маппинге.
-                                        AtomicStorage.Set(alias, chipToken);
-                                        System.Diagnostics.Debug.WriteLine($"[Storage Pre-heat] Registered chip: {alias}");
-                                    }
-                                }
+                            Newtonsoft.Json.Linq.JArray chips;
+                            try
+                            {
+                                chips = ChipStorage.Shared.CommitAndCreateSnapshot(payload["chipIds"] as Newtonsoft.Json.Linq.JArray);
+                            }
+                            catch (ArgumentException ex)
+                            {
+                                ChipStorage.Shared.DiscardPending();
+                                WebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(new
+                                {
+                                    action = "ui_log",
+                                    role = "ai",
+                                    content = ex.Message,
+                                    turn = payload["turn"]?.ToObject<int>() ?? 0
+                                }));
+                                break;
                             }
 
                             // 3. ПЕРЕДАЧА ИИ: Отправляем очищенный текст промпта асинхронному MCP-клиенту
-                            if (!string.IsNullOrEmpty(prompt))
                             {
                                 System.Diagnostics.Debug.WriteLine($"[UI Debug] Prompt sent to AI: {prompt}");
 
@@ -279,7 +296,8 @@ namespace AtomixAI.Main.UI
                                 {
                                     action = "chat_request",
                                     prompt = prompt,
-                                    generation = generation
+                                    generation = generation,
+                                    chips = chips
                                 });
                                 _mcpHost.BroadcastToClients(pipePayload);
                             }

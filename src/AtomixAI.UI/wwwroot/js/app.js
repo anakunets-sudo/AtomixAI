@@ -20,6 +20,9 @@ window.Atomix.RevitBridge.onMessage((data) => {
     if (data.action === 'MENU_DATA') {
         window.Atomix.MenuController.update(data.payload.items);
     }
+    else if (data.action === 'CHIP_CREATED' || data.action === 'CHIP_CREATE_ERROR') {
+        window.Atomix.MenuController.completeParameterChip(data);
+    }
     // 2. Обработка изменения темы со стороны Revit
     else if (data.action === 'theme_changed') {
         applyTheme(data.theme);

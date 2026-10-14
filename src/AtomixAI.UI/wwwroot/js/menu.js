@@ -7,6 +7,7 @@ window.Atomix.MenuController = {
     get searchEl() { return document.getElementById('menu-search'); },
     get searchInput() { return document.getElementById('menu-search-input'); },
     get searchBtn() { return document.getElementById('menu-search-btn'); },
+    get pinnedActionHost() { return document.getElementById('menu-pinned-action'); },
     get listContainer() { return document.getElementById('menu-items'); },
     items: [],
     history: [], // Стек состояний: [{ items: [], index: 0, title: '' }]
@@ -18,6 +19,8 @@ window.Atomix.MenuController = {
     searchQuery: '',
     collapsedGroups: {},
     _searchBound: false,
+    chipRequestSequence: 0,
+    pendingChipRequestId: null,
     update(newItems, isBackAction = false, title = null) {
         // Если мы вернулись на главный уровень (Level 0), можно сбросить min-height
         // или оставить зафиксированной до закрытия меню #.
@@ -72,7 +75,10 @@ window.Atomix.MenuController = {
     _firstSelectableIndex(list) {
         const items = list || [];
         for (let i = 0; i < items.length; i++) {
-            if (!this._isGroup(items[i]) || this._isCollapsibleGroup(items[i])) return i;
+            if (!items[i].isPinnedAction && (!this._isGroup(items[i]) || this._isCollapsibleGroup(items[i]))) return i;
+        }
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].isPinnedAction) return i;
         }
         return -1;
     },
@@ -89,7 +95,7 @@ window.Atomix.MenuController = {
     _viewItems() {
         const q = (this.searchQuery || '').trim().toLowerCase();
         if (!this.items.some(item => this._isGroup(item))) {
-            return q ? this.items.filter(item => this._nameMatches(item, q)) : this.items;
+            return q ? this.items.filter(item => item.isPinnedAction || this._nameMatches(item, q)) : this.items;
         }
         const result = [];
         let i = 0;
@@ -113,14 +119,14 @@ window.Atomix.MenuController = {
                 }
                 i = j;
             } else {
-                if (!q || this._nameMatches(item, q)) result.push(item);
+                if (item.isPinnedAction || !q || this._nameMatches(item, q)) result.push(item);
                 i++;
             }
         }
         return result;
     },
     _needsSearch() {
-        return this.items.length > this.VISIBLE_ROWS;
+        return this.items.filter(item => !item.isPinnedAction).length > this.VISIBLE_ROWS;
     },
     isSearchFocused() {
         const input = this.searchInput;
@@ -170,6 +176,17 @@ window.Atomix.MenuController = {
         if (item.insertAlias) {
             window.Atomix.ChipsController.insertAlias(item.insertAlias);
             inserted = true;
+        } else if (item.isParameterChip) {
+            if (this.pendingChipRequestId) return false;
+            const requestId = `chip-request-${++this.chipRequestSequence}`;
+            this.pendingChipRequestId = requestId;
+            this.loadingIndex = this.selectedIndex;
+            this._renderItems();
+            window.Atomix.RevitBridge.send('CREATE_CHIP', { id: item.id, requestId });
+            return false;
+        } else if (item.isModelChip) {
+            window.Atomix.ChipsController.insertChip(item);
+            inserted = true;
         } else if (item.meta) {
             window.Atomix.ChipsController.create(item);
             inserted = true;
@@ -179,9 +196,26 @@ window.Atomix.MenuController = {
         // повторный focus() в _attachItemEvents только сбросил бы каретку.
         return inserted;
     },
+    completeParameterChip(data) {
+        if (!data.requestId || data.requestId !== this.pendingChipRequestId) return;
+        this.pendingChipRequestId = null;
+        if (data.action === 'CHIP_CREATED' && data.chip) {
+            window.Atomix.ChipsController.insertChip(data.chip);
+            this.hide();
+        } else if (data.action === 'CHIP_CREATE_ERROR') {
+            this.loadingIndex = -1;
+            this._renderItems();
+            if (typeof appendMessage === 'function') appendMessage('ai', data.message || 'Unable to create the selected chip.');
+        }
+    },
 
     goBack() {
         if (this.history.length === 0) return;
+        if (this.items.some(item => String(item.id || '').startsWith('el_'))) {
+            this.history = [];
+            this.update();
+            return;
+        }
         const prevState = this.history.pop();
         this.items = prevState.items;
         this.selectedIndex = prevState.index; // Возвращаемся на тот же пункт, с которого ушли
@@ -256,11 +290,23 @@ window.Atomix.MenuController = {
     _renderItems() {
         if (!this.listContainer) return;
         const view = this._viewItems();
-        if (!view.length) {
-            this.listContainer.innerHTML = `<div class="menu-empty">${window.Atomix.t('menu.noResults', 'No results')}</div>`;
+        const pinnedIndex = view.findIndex(item => item.isPinnedAction);
+        const pinnedAction = pinnedIndex >= 0 ? view[pinnedIndex] : null;
+        if (this.pinnedActionHost) {
+            this.pinnedActionHost.innerHTML = pinnedAction
+                ? `<div class="menu-back-row menu-pick-action ${pinnedIndex === this.selectedIndex ? 'selected' : ''}" data-index="${pinnedIndex}" role="button" tabindex="0"><span class="menu-label">${this._withIconSpan(pinnedAction.name)}</span><span class="menu-arrow">&#xE76C;</span></div>`
+                : '';
+        }
+        const listView = view.filter(item => !item.isPinnedAction);
+        if (!listView.length) {
+            const hasSearchableItems = this.items.some(item => !item.isPinnedAction);
+            this.listContainer.innerHTML = this.searchQuery && hasSearchableItems
+                ? `<div class="menu-empty">${window.Atomix.t('menu.noResults', 'No results')}</div>`
+                : '';
         } else {
             let inCollapsibleGroup = false;
-            this.listContainer.innerHTML = view.map((item, i) => {
+            this.listContainer.innerHTML = listView.map((item) => {
+                const i = view.indexOf(item);
                 const isGroup = this._isGroup(item);
                 const isCollapsibleGroup = this._isCollapsibleGroup(item);
                 if (isGroup) inCollapsibleGroup = isCollapsibleGroup;
@@ -277,12 +323,13 @@ window.Atomix.MenuController = {
                 const groupClass = isGroup ? ' is-group' : '';
                 const collapsibleClass = isCollapsibleGroup ? ' is-collapsible-group' : '';
                 const childClass = isGroupChild ? ' is-group-child' : '';
+                const modelDataClass = item.isModelChip ? ' menu-model-data' : '';
                 const collapsed = isCollapsibleGroup && this.collapsedGroups[item.id];
                 const groupArrow = isCollapsibleGroup
                     ? `<span class="menu-group-arrow">${collapsed ? '&#xE76C;' : '&#xE70D;'}</span>`
                     : '';
                 const expandedAttribute = isCollapsibleGroup ? ` aria-expanded="${!collapsed}" role="button" tabindex="0"` : '';
-                return `<div class="menu-item ${isSel}${groupClass}${collapsibleClass}${childClass}" data-index="${i}"${expandedAttribute}><span class="menu-item-text">${label}</span>${groupArrow}${arrowIcon}</div>`;
+                return `<div class="menu-item ${isSel}${groupClass}${collapsibleClass}${childClass} ${modelDataClass}" data-index="${i}"${expandedAttribute}><span class="menu-item-text">${label}</span>${groupArrow}${arrowIcon}</div>`;
             }).join('');
         }
         this.listContainer.classList.toggle('is-scrollable', this._needsSearch());
@@ -292,6 +339,8 @@ window.Atomix.MenuController = {
     _syncSelection() {
         const header = document.getElementById('menu-header-back');
         if (header) header.classList.toggle('selected', this.selectedIndex === -1);
+        const pinnedAction = this.pinnedActionHost && this.pinnedActionHost.querySelector('.menu-pick-action');
+        if (pinnedAction) pinnedAction.classList.toggle('selected', parseInt(pinnedAction.dataset.index, 10) === this.selectedIndex);
         if (!this.listContainer) return;
         this.listContainer.querySelectorAll('.menu-item').forEach((el) => {
             const i = parseInt(el.dataset.index, 10);
@@ -302,7 +351,7 @@ window.Atomix.MenuController = {
     },
     _attachItemEvents() {
         if (!this.listContainer) return;
-        Array.from(this.listContainer.querySelectorAll('.menu-item')).forEach(el => {
+        const attach = el => {
             if (el.classList.contains('is-collapsible-group')) {
                 el.addEventListener('mousedown', (e) => {
                     if (e.button !== 0) return;
@@ -323,7 +372,12 @@ window.Atomix.MenuController = {
                 // пробелом; повторный focus() сбросил бы каретку в начало строки.
                 if (!this.drillDown()) window.Atomix.EditorController.el.focus();
             });
-        });
+        };
+        Array.from(this.listContainer.querySelectorAll('.menu-item')).forEach(attach);
+        if (this.pinnedActionHost) {
+            const pinnedAction = this.pinnedActionHost.querySelector('.menu-pick-action');
+            if (pinnedAction) attach(pinnedAction);
+        }
     },
     _ensureSearchBound() {
         if (this._searchBound) return;

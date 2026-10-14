@@ -16,14 +16,15 @@
   "chat.cancel": "Abbrechen",
   "chat.cancelled": "Vom Benutzer abgebrochen",
 
-  "input.placeholder": "Mit Livvy chatten, '#' für Menü",
+  "input.placeholder": "Mit Livvy chatten, # für Menü",
+  "input.menu": "Menü öffnen",
   "input.voice": "Spracheingabe",
   "input.send": "Senden [Enter]",
 
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",
   "footer.aiModel": "KI-Modell:",
-  "footer.modelName": "Google Gemini",
+  "footer.modelName": "Anthropic",
 
   "rate.markSolution": "Als Lösung markieren",
   "rate.markedSolution": "Als Lösung markiert",
@@ -32,6 +33,7 @@
 
   "menu.recent": "Zuletzt verwendet",
   "menu.tags": "Schlagwörter",
+  "menu.modelData": "Modelldaten",
   "menu.selection": "Auswahl",
   "menu.commands": "Befehle",
   "menu.back": "Zurück",

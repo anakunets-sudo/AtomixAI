@@ -9,6 +9,7 @@ let thinkingMsgId = null;
 let isWorking = false;
 let chatTurn = 0;
 let cancelledTurn = 0;
+const chatChips = new Map();
 
 // Прокрутка чата к последнему сообщению. Повторяем в следующем кадре и
 // коротким таймаутом: после вставки содержимого (markdown, иконки рейтинга,
@@ -56,6 +57,17 @@ inputField.addEventListener('input', function () {
 });
 
 resizeInputField();
+
+function openMenu() {
+    const menu = window.Atomix.MenuController;
+    if (menu.isOpen) {
+        menu.hide();
+        inputField.focus();
+        return;
+    }
+    inputField.focus();
+    menu.update();
+}
 
 // Слушаем событие ПЕРЕХВАТА вставки на уровне всего документа
 document.addEventListener('paste', function (e) {
@@ -166,18 +178,23 @@ function sendMessage() {
     const text = inputField.innerHTML.trim();
     if (!text || isWorking) return;
 
-    // 1. Извлекаем текст сообщения (DOM-структура div с чипсами преобразуется в строку)
-    // Пользователь видит плашки, но textContent вернет строку вида: "Измени параметр #Высота на 3000"
-    const plainTextPrompt = inputField.textContent.trim();
+    let serialized;
+    try {
+        serialized = window.Atomix.ChipsController.serialize(inputField);
+    } catch (error) {
+        appendMessage('ai', error.message);
+        return;
+    }
+    if (!serialized.prompt) return;
 
-    // 2. СБОР КОНТЕКСТА: Находим все span.bim-chip, которые реально остались на экране
-    // Если чипсов нет, querySelectorAll вернет пустой список, и массив останется пустым []
-    const contextArray = Array.from(inputField.querySelectorAll('.bim-chip')).map(chip => {
-        const rawJson = chip.getAttribute('data-json');
-        return {
-            alias: chip.innerText.trim(), // Строковый тег из чата, например "#Высота"
-            ...(rawJson ? JSON.parse(rawJson) : {}) // Распаковываем все BIM-метаданные в корень объекта
-        };
+    inputField.querySelectorAll('.bim-chip').forEach(chip => {
+        const chipId = chip.getAttribute('data-chip-id');
+        if (!/^chip_[1-9]\d*$/.test(chipId || '')) return;
+        chatChips.set(chipId, {
+            chipId,
+            chipLabel: chip.textContent || '',
+            chipTooltip: chip.getAttribute('data-tooltip') || ''
+        });
     });
 
     appendMessage('user', text);
@@ -188,8 +205,8 @@ function sendMessage() {
     // 3. Отправляем строго структурированный пакет в C#
     sendAction('chat_request', {
         payload: {
-            prompt: plainTextPrompt,
-            context: contextArray,
+            prompt: serialized.prompt,
+            chipIds: serialized.chipIds,
             turn: chatTurn
         }
     });
@@ -204,9 +221,7 @@ const messageSanitizeConfig = {
         'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5',
         'h6', 'hr', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span'
     ],
-    // Атрибуты чипов должны переживать санитайзер, иначе в чате они теряют
-    // тултип и BIM-паспорт (data-json) и перестают быть «неизменными».
-    ADD_ATTR: ['data-json', 'data-tooltip'],
+    ADD_ATTR: ['data-chip-id', 'data-tooltip'],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     SAFE_FOR_TEMPLATES: true
@@ -262,8 +277,18 @@ function decorateAliases(container) {
     });
 }
 
+function decorateChipReferences(container) {
+    if (!window.Atomix.ChipsController) return;
+    container.querySelectorAll('span[data-chip-id]').forEach(chip => {
+        window.Atomix.ChipsController.restoreMessageTooltip(chip, chatChips);
+    });
+}
+
 function renderMessageContent(container, text) {
     container.innerHTML = sanitizeMessageHtml(text);
+
+    // Restore chip tooltips from the UI-owned chip snapshot, never from AI HTML.
+    decorateChipReferences(container);
 
     // Класс alias-btn назначается только элементам, созданным этим приложением.
     container.querySelectorAll('.alias-btn').forEach(element => {
@@ -386,6 +411,22 @@ function initAliasButtons(container) {
             }, 200);
         });
     });
+
+    container.querySelectorAll('.bim-chip').forEach(chip => {
+        chip.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            window.Atomix.ChipsController.insertChip(chip);
+
+            chip.style.background = 'var(--accent)';
+            chip.style.color = '#fff';
+            setTimeout(() => {
+                chip.style.background = '';
+                chip.style.color = '';
+            }, 200);
+        });
+    });
 }
 
 // --- 4. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
@@ -470,4 +511,3 @@ document.addEventListener('mouseout', e => {
         tip.style.display = 'none';
     }
 });
-

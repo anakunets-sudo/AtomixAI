@@ -10,6 +10,7 @@ namespace AtomixAI.UI.Infrastructure
     public static class WebViewUiCommandDispatcher
     {
         private const string SubContextAction = "GET_SUB_CONTEXT";
+        private const string CreateChipAction = "CREATE_CHIP";
 
         // Каждый пункт меню (#) — отдельный класс. Новый пункт = новый класс + строка здесь.
         private static readonly List<IMenuItemUiCommand> _menuItemCommands = new List<IMenuItemUiCommand>
@@ -22,8 +23,30 @@ namespace AtomixAI.UI.Infrastructure
             new TypeParametersUiCmd(),
         };
 
-        public static string Dispatch(string action, string itemId, UIApplication app)
+        public static string Dispatch(string action, string itemId, string requestId, UIApplication app)
         {
+            if (string.Equals(action, CreateChipAction, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        action = "CHIP_CREATED",
+                        requestId,
+                        chip = ParameterMenuBuilder.CreateChip(app, itemId)
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        action = "CHIP_CREATE_ERROR",
+                        requestId,
+                        message = ex.Message
+                    });
+                }
+            }
+
             if (!string.Equals(action, SubContextAction, StringComparison.OrdinalIgnoreCase))
                 return null;
 

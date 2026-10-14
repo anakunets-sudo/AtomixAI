@@ -1,4 +1,40 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
-
+  "permission": {
+    "task": "allow"
+  },
+  "compaction": {
+    "auto": true
+  },
+  "provider": {
+    "open-router": {
+      "models": {
+        "openai/gpt-6-luna-pro": {
+          "limit": {
+            "context": 272000,
+            "input": 240000,
+            "output": 32000
+          }
+        },
+        "anthropic/claude-haiku-5.5": {
+          "limit": {
+            "context": 100000,
+            "input": 80000,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "teamorouter": {
+      "models": {
+        "gpt-6.1-sol": {
+          "limit": {
+            "context": 272000,
+            "input": 240000,
+            "output": 32000
+          }
+        }
+      }
+    }
+  }
 }

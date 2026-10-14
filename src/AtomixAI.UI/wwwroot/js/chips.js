@@ -17,6 +17,40 @@ window.Atomix.ChipsController = {
         this._insertTag(aliasElement, '\u00A0');
     },
 
+    insertChip(chip) {
+        const input = window.Atomix.EditorController.el;
+        if (!input || !chip) return;
+
+        const element = chip instanceof HTMLElement
+            ? (chip.classList.contains('bim-chip') ? chip.cloneNode(true) : null)
+            : this.createElement(chip);
+        if (element) {
+            element.contentEditable = 'false';
+            this._insertTag(element, '\u00A0');
+        }
+    },
+
+    createElement(item) {
+        if (!item || !item.chipId) return null;
+        const chip = document.createElement('span');
+        chip.className = 'bim-chip';
+        chip.contentEditable = 'false';
+        chip.setAttribute('data-chip-id', item.chipId);
+        chip.setAttribute('data-tooltip', item.chipTooltip || '');
+        chip.textContent = item.chipLabel || item.name || '';
+        return chip;
+    },
+
+    restoreMessageTooltip(element, chipsById) {
+        if (!element || element.tagName !== 'SPAN' || !chipsById) return false;
+        const chip = chipsById.get(element.getAttribute('data-chip-id'));
+        if (!chip) return false;
+        element.classList.add('bim-chip');
+        element.contentEditable = 'false';
+        element.setAttribute('data-tooltip', chip.chipTooltip || '');
+        return true;
+    },
+
     // Вставляет тег на место каретки (или в конец поля) и гарантирует, что СНАРУЖИ
     // span стоит ровно один пробел, а курсор — сразу за этим пробелом.
     _insertTag(element, spaceChar = ' ') {
@@ -81,17 +115,20 @@ window.Atomix.ChipsController = {
     // Создание и вставка чипса по объекту из меню
     create(item) {
         const input = window.Atomix.EditorController.el;
-        if (!input || !item.meta) return;
+        if (!input || !item.meta || !item.chipId) return;
 
         const meta = item.meta;
 
         // Формируем красивый многострочный тултип с защитой от отсутствующих полей
         const tooltipParts = [];
-        if (meta.paramType) tooltipParts.push(`[${meta.paramType}]`);
-        if (meta.category) tooltipParts.push(`Категория: ${meta.category}`);
-        if (meta.elementName) tooltipParts.push(`Элемент: ${meta.elementName}`);
-        if (meta.elementId) tooltipParts.push(`ID: ${meta.elementId}`);
-        if (meta.paramName && meta.paramValue) tooltipParts.push(`Свойство: ${meta.paramName} = ${meta.paramValue}`);
+        if (meta.paramType) tooltipParts.push(`${meta.paramType}`);
+        if (meta.paramName != null && meta.paramName !== '' && meta.paramValue != null && meta.paramValue !== '') {
+            const unitLabel = meta.unitLabel;
+            tooltipParts.push(`Parameter: ${meta.paramName} = ${meta.paramValue}` + (unitLabel != null && unitLabel !== '' ? ` ${unitLabel}` : ''));
+        }
+        if (meta.elementName) tooltipParts.push(`Element: ${meta.elementName}`);
+        if (meta.category) tooltipParts.push(`Category: ${meta.category}`);        
+        if (meta.elementId) tooltipParts.push(`Id: ${meta.elementId}`);       
 
         const tooltipText = tooltipParts.join('\n');
 
@@ -100,8 +137,7 @@ window.Atomix.ChipsController = {
         chip.className = 'bim-chip';
         chip.contentEditable = 'false'; // Защита от редактирования по буквам
 
-        // КЛЮЧЕВОЙ ШАГ: Сериализуем весь BIM-паспорт объекта целиком в один атрибут
-        chip.setAttribute('data-json', JSON.stringify(item.meta));
+        chip.setAttribute('data-chip-id', item.chipId);
 
         // Тултип и имя оставляем как было
         chip.setAttribute('data-tooltip', tooltipText);
@@ -113,6 +149,33 @@ window.Atomix.ChipsController = {
 
         // Триггерим событие изменения высоты поля, как в main.js
         input.dispatchEvent(new Event('input'));
+    },
+
+    serialize(input) {
+        const chipIds = new Set();
+        const walk = node => {
+            if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
+            if (node.classList.contains('bim-chip')) {
+                const id = node.getAttribute('data-chip-id');
+                if (!/^chip_[1-9]\d*$/.test(id || '')) {
+                    throw new Error('Stale chip. Remove it and select it again from the menu.');
+                }
+                chipIds.add(id);
+                return `[${id}]`;
+            }
+            if (node.tagName === 'BR') return '\n';
+            let text = '';
+            for (const child of node.childNodes) {
+                const block = child.nodeType === Node.ELEMENT_NODE && /^(DIV|P|LI)$/.test(child.tagName);
+                if (block && text && !text.endsWith('\n')) text += '\n';
+                text += walk(child);
+                if (block && !text.endsWith('\n')) text += '\n';
+            }
+            return text;
+        };
+        const prompt = walk(input).trim();
+        return { prompt, chipIds: Array.from(chipIds) };
     },
 
     _triggerChar() {
