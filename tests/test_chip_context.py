@@ -40,7 +40,7 @@ class ChipContextTests(unittest.TestCase):
     def test_snapshot_survives_refinement_and_reaches_model(self):
         chips = [{"id": "chip_1", "label": "#Height", "data": {"value": 12, "units": "mm"}}]
         process = self.env["process_ai_logic"]
-        self.assertEqual(process("Use [chip_1]", None, 1, chips), "Provide a value.")
+        self.assertEqual(process("Use [chip_1]", None, 1, chips), ("Provide a value.", False))
         chips[0]["data"]["units"] = "changed"
         process("Use 20 instead", None, 2, [])
         content = self.plans[-1]["messages"][-1]["content"]

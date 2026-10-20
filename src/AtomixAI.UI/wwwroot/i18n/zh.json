@@ -15,11 +15,16 @@
   "chat.thinking": "正在生成逻辑...",
   "chat.cancel": "取消",
   "chat.cancelled": "已被用户取消",
+  "chat.copyMessage": "复制消息",
+  "chat.messageCopied": "已复制",
+  "chat.copyFailed": "无法复制消息",
 
   "input.placeholder": "与 Livvy 对话，输入 # 打开菜单",
   "input.menu": "打开菜单",
   "input.voice": "语音输入",
   "input.send": "发送 [Enter]",
+
+  "chip.edit": "编辑",
 
   "footer.settings": "展开环境设置",
   "footer.aiCore": "AI 核心：",

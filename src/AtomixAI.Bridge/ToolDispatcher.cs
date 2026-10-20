@@ -268,8 +268,12 @@ namespace AtomixAI.Bridge
                                 // 1. Всегда пишем в базовый словарь контракта
                                 paramsContract.Set(kp.Key, kp.Value);
 
-                                // 2. Умная запись в автосвойства схемы
-                                var sProp = schemaProps.FirstOrDefault(p => p.Name.Equals(kp.Key, StringComparison.OrdinalIgnoreCase));
+                                // 2. Умная запись в автосвойства схемы.
+                                // Сопоставление не зависит от подчёркиваний, чтобы чипсовые ключи
+                                // ('parameter_Id', 'is_Type') привязывались к ParameterId/IsType.
+                                string normalizedKey = NormalizeKey(kp.Key);
+                                var sProp = schemaProps.FirstOrDefault(
+                                    p => NormalizeKey(p.Name).Equals(normalizedKey, StringComparison.OrdinalIgnoreCase));
                                 if (sProp != null && sProp.CanWrite && kp.Value != null)
                                 {
                                     try
@@ -289,6 +293,11 @@ namespace AtomixAI.Bridge
                                             {
                                                 sProp.SetValue(paramsContract, token.ToObject(sProp.PropertyType));
                                             }
+                                        }
+                                        else if (sProp.PropertyType == typeof(string))
+                                        {
+                                            // Примитивы (bool/number) приводим к строке: иначе флаги чипса теряются.
+                                            sProp.SetValue(paramsContract, Convert.ToString(kp.Value, System.Globalization.CultureInfo.InvariantCulture));
                                         }
                                         else
                                         {
@@ -317,5 +326,9 @@ namespace AtomixAI.Bridge
                 }
             }
         }
+
+        // Убирает подчёркивания: 'parameter_Id' и 'ParameterId' считаются одним ключом.
+        private static string NormalizeKey(string value) =>
+            string.IsNullOrEmpty(value) ? string.Empty : value.Replace("_", string.Empty);
     }
 }

@@ -382,7 +382,7 @@ session_state = ContextStateManager()
 dynamic_manual = None
 
 def _sequence_has_context_param(sequence, context_tag):
-    """True if active_context_tag like 'filter_parameters:Value' is already filled in sequence."""
+    """True if active_context_tag like 'filter_parameters:ParameterValue' is already filled in sequence."""
     if not sequence or not context_tag or ":" not in str(context_tag):
         return False
     tool_name, param_name = str(context_tag).split(":", 1)
@@ -647,7 +647,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         except requests.exceptions.Timeout:
             log("[!] CRITICAL: Gemini API read timeout on step 3 (60s exceeded).")
             exchange(client, {"action": "ping"}, generation)
-            return "The AI server is overloaded. Please retry your request."
+            return "The AI server is overloaded. Please retry your request.", False
         
         # --- ОТЛАДКА СЫРОГО ОТВЕТА ---
         log(f"[DEBUG] HTTP Status: {response.status_code}")
@@ -656,7 +656,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         if response.status_code != 200:
             log(f"[!] Plan API returned HTTP {response.status_code}: {response.text}")
             exchange(client, {"action": "ping"}, generation)
-            return f"API Error {response.status_code}: {response.text}"
+            return f"API Error {response.status_code}: {response.text}", False
 
             
         res_data = response.json()
@@ -670,7 +670,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # -----------------------------------------------------------------
         if "tool_calls" not in message_node or not message_node["tool_calls"]:
             log("[!] Scenario A: AI response has no tool_calls.")
-            return "Please clarify your request."
+            return "Please clarify your request.", False
 
         # -----------------------------------------------------------------
         # ШАГ 2. СЦЕНАРИЙ Б: ИИ СГЕНЕРИРОВАЛ ВЫЗОВ ФУНКЦИИ
@@ -690,7 +690,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         log(f">>> [LANG] User language: {detected_lang}")
 
         # Модель иногда ставит active_context_tag, хотя параметр уже есть в sequence
-        # (как filter_parameters:Value при Value="Гараж"). Тогда не блокируем исполнение.
+        # (как filter_parameters:ParameterValue при ParameterValue="Гараж"). Тогда не блокируем исполнение.
         if ai_active_context_tool not in [None, ""] and ai_sequence and _sequence_has_context_param(ai_sequence, ai_active_context_tool):
             log(f"[*] Ignoring stale active_context_tag '{ai_active_context_tool}' — value already present in sequence.")
             ai_active_context_tool = ""
@@ -714,10 +714,10 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
                 log(f"[-] Flood limit blown in Scenario B. Dropping context dynamically.")
                 session_state.clear()
-                return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string)
+                return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string), False
 
             if ai_user_msg:
-                return ai_user_msg
+                return ai_user_msg, False
 
         # ВАРИАНТ 2: ИИ не вернул замок, но и команд в sequence нет — скрытый сбой/флуд модели
         if not ai_sequence:
@@ -728,11 +728,11 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
                     log("[-] Empty sequence flood limit blown in Scenario B. Clearing state.")
                     session_state.clear()
-                    return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string)
+                    return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string), False
             
             if ai_user_msg:
-                return ai_user_msg
-            return "The task could not be completed. Please refine your request."
+                return ai_user_msg, False
+            return "The task could not be completed. Please refine your request.", False
 
         # ВАРИАНТ 3: ТАКТИЧЕСКИЙ СБРОС (ИИ прислал пустой тег контекста и живой sequence)
         # Задача успешно дозаполнена или юзер сменил тему на другую валидную команду.
@@ -833,6 +833,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                         f"3. Don't count the steps of actions. Skip straight to the combined outcome.\n"
                         f"4. Be concise, instead of a success message, proceed directly to the final result.\n"
                         f"5. If the last step involves a quantity, you must specify the quantity in the FINAL result.\n"
+                        f"6. MANDATORY UNIQUENESS: do not repeat facts - the FINAL result must be unique.\n"
                         f"###REPORT_TAG_SYNCHRONIZATION\n"
                         f"1. TOOL TAGS: You need to look for the tag from the END of the <TECHNICAL_REPORT_LOG> and IF you find the tag then include it in the FINAL RESULT. Usually one tag is enough.\n"
                         f"2. NO GHOST TAGS: Never mention a tag not specified in the <TECHNICAL_REPORT_LOG>.\n"
@@ -876,8 +877,11 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
 
             try:
                 final_response = requests.post(FULL_URL, json=human_payload, headers=headers, timeout=60)
+                final_response.raise_for_status()
                 final_data = final_response.json()
-                final_report_text = f"{final_data['choices'][0]['message']['content']}"
+                final_report_text = final_data["choices"][0]["message"]["content"]
+                if not isinstance(final_report_text, str) or not final_report_text.strip():
+                    raise ValueError("Final report response was empty or invalid.")
                 log(f"[DEBUG] Raw Response Content (final_data): {final_report_text}")
 
                 # СПИСОК СТОП-СЛОВ (Если ИИ выплюнул хотя бы одно, значит это утечка промпта!)
@@ -889,7 +893,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
 
                 if any(trigger in final_report_text for trigger in PROMPT_LEAK_TRIGGERS):
                     log(">>> [SECURITY ALERT] System prompt leak detected! Overriding AI output.")    
-                    return "An unexpected error occurred while formatting the report. Please try again."
+                    return "An unexpected error occurred while formatting the report. Please try again.", False
 
                 session_state.clear()  # Полное финальное обнуление стейта для stateless-режима
 
@@ -923,16 +927,16 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
 
                 log(f"\n\n")
 
-                return final_report_text
+                return final_report_text, execution_result.get("success") is True
 
             except RequestAborted:
                 raise
             except Exception as final_err:
                 log(f"[!] Error on step final response: {final_err}")
-                return f"Execution context: {execution_result.get('message')}"
+                return f"Execution context: {execution_result.get('message')}", False
 
         else:
-            return res_data
+            return str(res_data), False
 
     except RequestAborted:
         log("[!] User cancelled the request. Assistant reply suppressed.")
@@ -940,7 +944,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         raise
     except Exception as e:
         log(f"[CRITICAL] Logic Crash inside Function Calling engine: {e}")
-        return f"System Error: {str(e)}"
+        return f"System Error: {str(e)}", False
 
 def main():
     """Подключается к Revit и обрабатывает запросы чата в цикле событий."""
@@ -970,7 +974,7 @@ def main():
                 print(f"\n[USER]: {prompt}")
                 
                 try:
-                    ai_text = process_ai_logic(prompt, client, generation, chips)
+                    ai_text, final_report_created = process_ai_logic(prompt, client, generation, chips)
                 except RequestAborted:
                     log("[!] User cancelled the request. Assistant reply suppressed.")
                     continue
@@ -980,6 +984,7 @@ def main():
                     "action": "ui_log", 
                     "role": "ai", 
                     "content": ai_text,
+                    "final_report_created": final_report_created,
                     "turn": generation,
                 })
 

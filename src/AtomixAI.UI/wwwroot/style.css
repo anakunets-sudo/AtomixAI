@@ -7,6 +7,7 @@
     --nav-bg: #f0f0f0;
     --accent: #0078d4;
     --danger: #d13438;
+    --success: #2e9e4f;
     --ai-msg: #f0f0f0;
     --user-msg: #dadada;
     --user-text: #333;
@@ -26,6 +27,7 @@
     --nav-text: #f5f5eb;
     --nav-bg: #2c3440;
     --accent: #00a2ff;
+    --success: #50a96c;
     --ai-msg: #2c3440;
     --user-msg: #222933;
     --user-text: #e0e0e0;
@@ -142,7 +144,7 @@ body {
     opacity: 1;
 }
 
-.alias-btn:hover {
+.alias-btn:hover, .bim-chip:hover {
         opacity: 0.8;
     }
 
@@ -171,6 +173,92 @@ body {
     border-bottom-right-radius: 2px;
     font-family: "Segoe UI Symbol", "Segoe UI", Arial, sans-serif;
     max-width: 85%;
+}
+
+.chat-user-message {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: 0;
+}
+
+.chat-user-message .msg.user {
+    align-self: flex-start;
+    max-width: calc(100% - 58px);
+}
+
+.copy-user-message {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    margin-top: 1px;
+    padding: 5px;
+    border: 0px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    opacity: 0.75;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.copy-user-message svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.0;
+}
+
+.copy-user-message svg:hover {
+    stroke: var(--accent);
+}
+
+.copy-user-message .copy-icon-check {
+    display: none;
+}
+
+.copy-user-message:hover {
+    border-color: var(--border);
+    background: var(--panel);
+    opacity: 1;
+}
+
+.copy-user-message:active {
+    background: var(--border);
+    transform: scale(0.94);
+}
+
+.copy-user-message:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    opacity: 1;
+}
+
+.copy-user-message.is-copied {
+    color: var(--accent);
+    opacity: 1;
+}
+
+.copy-user-message.is-copied .copy-icon-copy {
+    display: none;
+}
+
+.copy-user-message.is-copied .copy-icon-check {
+    display: block;
+}
+
+.copy-user-message.is-error {
+    color: var(--danger);
+    opacity: 1;
 }
 
 .ai {
@@ -238,6 +326,20 @@ body {
 .rate-btn:hover {
     opacity: 1;
     color: var(--accent);
+}
+
+.rating-success {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    color: var(--success);
+}
+
+.rating-success svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    margin: -8px 0 -4px 0;
 }
 
 
@@ -505,10 +607,6 @@ opacity: .8;
     background: rgba(var(--bg), 0.3);
 }*/
 
-.menu-model-data {
-    display: contents;
-}
-
 .menu-item, .menu-item.selected {
     display: flex;
     align-items: center;
@@ -519,6 +617,10 @@ opacity: .8;
     padding: 4px 6px;
     overflow: hidden;
 }
+
+.menu-item.menu-model-data {
+    display: contents;
+} 
 
 .menu-icon {
     display: inline-block;
@@ -755,10 +857,122 @@ input:checked + .slider:before {
 .bim-chip {
     /*background: var(--accent);*/
     color: var(--accent);
-    padding: 0px 5px 1px 3px;
+    padding: 0px 8px 1px 3px;
     border-radius: 12px;
     margin: 0 4px;
     cursor: pointer;
     border: 1px solid var(--accent);
+    white-space: nowrap;
+    position: relative;
+}
+
+.chip-label {
+    transition: color .12s;
+}
+
+/* Кнопка правки: только у чипсов в поле ввода. В обычном состоянии скрыта. */
+.chip-edit {
+    display: none;
+    margin-left: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+    line-height: 1;
+    opacity: 0.9;
+}
+
+/* Текст "Edit" показываем только в центральном оверлее; справа остаётся один карандаш. */
+.chip-edit-text {
+    display: none;
+}
+
+/* Наведение на редактируемый чипс: заливка акцентом, белый текст. */
+.bim-chip.chip-editable:hover {
+    background: var(--accent);
+    color: #fff;
+    opacity: 1;
+}
+
+.bim-chip.chip-editable:hover .chip-label {
+    color: #fff;
+}
+
+/* Неотредактированный чипс: подпись прячем (место сохраняется, размер не меняется),
+   а белый карандаш показываем по центру. */
+.bim-chip.chip-editable:hover:not(.chip-edited):not(.chip-editing) .chip-label {
+    color: transparent;
+}
+
+.bim-chip.chip-editable:hover:not(.chip-edited):not(.chip-editing) .chip-edit {
+    display: flex;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin: 0;
+    padding: 0 2px 2px 2px;
+    opacity: 1;
+    color: #fff;
+    pointer-events: none;
+    line-height: 1;
+    white-space: nowrap;
+    font-style:italic;
+}
+
+.bim-chip.chip-editable:hover:not(.chip-edited):not(.chip-editing) .chip-edit-text {
+    display: inline;
+}
+
+/* Чипс с подтверждённым пользователем значением: карандаш остаётся справа. */
+.bim-chip.chip-edited {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.bim-chip.chip-edited .chip-edit {
+    display: inline-block;
+}
+
+.bim-chip.chip-edited:hover {
+    background: var(--accent);
+}
+
+/* В режиме правки карандаш и заливка не нужны. */
+.bim-chip.chip-editing .chip-edit {
+    display: none;
+}
+
+.bim-chip.chip-editing:hover {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
     color: var(--accent);
+}
+
+.bim-chip.chip-editing:hover .chip-label {
+    color: var(--accent);
+}
+
+/* Кнопка подтверждения: показывается вместо карандаша в режиме редактирования. */
+.chip-confirm {
+    display: none;
+    margin-left: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+    line-height: 1;
+    opacity: 0.9;
+}
+
+.bim-chip.chip-editing .chip-confirm {
+    display: inline-block;
+}
+
+.chip-edit-input {
+    border: none;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    margin: 0;
+    width: 8ch;
+    min-width: 4ch;
+    vertical-align: baseline;
 }

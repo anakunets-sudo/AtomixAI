@@ -184,11 +184,8 @@ window.Atomix.MenuController = {
             this._renderItems();
             window.Atomix.RevitBridge.send('CREATE_CHIP', { id: item.id, requestId });
             return false;
-        } else if (item.isModelChip) {
-            window.Atomix.ChipsController.insertChip(item);
-            inserted = true;
-        } else if (item.meta) {
-            window.Atomix.ChipsController.create(item);
+        } else if (item.chipPayload) {
+            window.Atomix.ChipsController.insertChip(item.chipPayload);
             inserted = true;
         }
         this.hide();
@@ -199,8 +196,8 @@ window.Atomix.MenuController = {
     completeParameterChip(data) {
         if (!data.requestId || data.requestId !== this.pendingChipRequestId) return;
         this.pendingChipRequestId = null;
-        if (data.action === 'CHIP_CREATED' && data.chip) {
-            window.Atomix.ChipsController.insertChip(data.chip);
+        if (data.action === 'CHIP_CREATED' && data.chipPayload) {
+            window.Atomix.ChipsController.insertChip(data.chipPayload);
             this.hide();
         } else if (data.action === 'CHIP_CREATE_ERROR') {
             this.loadingIndex = -1;
@@ -313,7 +310,8 @@ window.Atomix.MenuController = {
                 const isGroupChild = !isGroup && inCollapsibleGroup;
                 const isSel = (!isGroup || isCollapsibleGroup) && i === this.selectedIndex ? 'selected' : '';
                 const isLoad = i === this.loadingIndex;
-                let label = this._withIconSpan(item.name);
+                const menuChip = item.chipPayload && window.Atomix.ChipsController.createElement(item.chipPayload);
+                let label = menuChip ? menuChip.outerHTML : this._withIconSpan(item.name);
                 if (isLoad) {
                     label = label.includes('class="menu-icon"')
                         ? label.replace(/<span class="menu-icon">[\s\S]*?<\/span>/, '<span class="menu-icon">⏳</span>') + '...'
@@ -323,7 +321,7 @@ window.Atomix.MenuController = {
                 const groupClass = isGroup ? ' is-group' : '';
                 const collapsibleClass = isCollapsibleGroup ? ' is-collapsible-group' : '';
                 const childClass = isGroupChild ? ' is-group-child' : '';
-                const modelDataClass = item.isModelChip ? ' menu-model-data' : '';
+                const modelDataClass = menuChip ? ' menu-model-data' : '';
                 const collapsed = isCollapsibleGroup && this.collapsedGroups[item.id];
                 const groupArrow = isCollapsibleGroup
                     ? `<span class="menu-group-arrow">${collapsed ? '&#xE76C;' : '&#xE70D;'}</span>`

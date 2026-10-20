@@ -33,7 +33,7 @@ namespace AtomixAI.UI.Infrastructure
                     {
                         action = "CHIP_CREATED",
                         requestId,
-                        chip = ParameterMenuBuilder.CreateChip(app, itemId)
+                        chipPayload = ParameterMenuBuilder.CreateChip(app, itemId)
                     });
                 }
                 catch (Exception ex)

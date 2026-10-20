@@ -52,4 +52,26 @@ Check(independent[0]["data"]!["nested"]!["value"]!.Value<int>() == 12, "Clear mu
 var ids = new System.Collections.Concurrent.ConcurrentBag<string>();
 Parallel.For(0, 100, _ => ids.Add(storage.CreatePending("same label", new JObject())));
 Check(ids.Distinct().Count() == 100, "Concurrent registration must allocate unique IDs.");
+
+// Подтверждённое значение: правка фиксируется в Model Data и повторно отправляется без stale.
+var editStorage = new ChipStorage();
+var pendingId = editStorage.CreatePending(
+    "#Mark: Гараж",
+    JObject.Parse("{\"parameter_Name\":\"Mark\",\"parameter_Value\":\"Гараж\"}"));
+editStorage.SetOverride(pendingId, JObject.Parse(
+    "{\"id\":\"" + pendingId + "\",\"label\":\"#Mark: Гар\",\"data\":{\"parameter_Name\":\"Mark\",\"parameter_Value\":\"Гар\"}}"));
+var edited = editStorage.CommitAndCreateSnapshot(new JArray(pendingId));
+Check(edited[0]["label"]!.Value<string>() == "#Mark: Гар", "Edited chip must send the confirmed value.");
+Check(edited[0]["data"]!["parameter_Value"]!.Value<string>() == "Гар", "Edited chip must not send the original value.");
+Check(editStorage.GetApprovedEntries().Count == 1, "Edited chip must appear in Model Data.");
+var resent = editStorage.CommitAndCreateSnapshot(new JArray(pendingId));
+Check(resent[0]["data"]!["parameter_Value"]!.Value<string>() == "Гар", "Re-sending an edited chip must not be stale.");
+
+// Правка уже подтверждённого чипса заменяет запись, а не создаёт дубль.
+editStorage.SetOverride(pendingId, JObject.Parse(
+    "{\"id\":\"" + pendingId + "\",\"label\":\"#Mark: Склад\",\"data\":{\"parameter_Name\":\"Mark\",\"parameter_Value\":\"Склад\"}}"));
+var reedited = editStorage.CommitAndCreateSnapshot(new JArray(pendingId));
+Check(reedited[0]["data"]!["parameter_Value"]!.Value<string>() == "Склад", "Re-editing must send the new confirmed value.");
+Check(editStorage.GetApprovedEntries().Count == 1, "Re-editing must not duplicate Model Data entries.");
+
 Console.WriteLine("ChipStorage tests passed.");

@@ -248,6 +248,48 @@ namespace AtomixAI.Main.UI
                         }
                         break;
 
+                    case "update_chip":
+                        // Пользователь подтвердил значение в поле ввода: в ИИ уйдёт только оно.
+                        string updateChipId = request["payload"]?["id"]?.ToString();
+                        if (!string.IsNullOrEmpty(updateChipId))
+                        {
+                            string confirmedValue = request["payload"]?["value"]?.ToString() ?? string.Empty;
+                            if (ChipStorage.Shared.TryGetEntry(updateChipId!, out var chipEntry) && chipEntry != null)
+                            {
+                                var chipData = chipEntry["data"] as Newtonsoft.Json.Linq.JObject
+                                               ?? new Newtonsoft.Json.Linq.JObject();
+                                string paramName = chipData["parameter_Name"]?.ToString() ?? string.Empty;
+                                string label = string.IsNullOrEmpty(confirmedValue)
+                                    ? $"#{paramName}"
+                                    : $"#{paramName}: {confirmedValue}";
+
+                                chipData["parameter_Value"] = confirmedValue;
+                                chipData["parameter_Unit_Label"] = string.Empty;
+
+                                // Оставляем единственное значение: исходное не сохраняем.
+                                string storageType = chipData["parameter_Storage_Type"]?.ToString() ?? string.Empty;
+                                if (string.Equals(storageType, "String", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    chipData["value"] = confirmedValue;
+                                }
+                                else
+                                {
+                                    chipData.Remove("value");
+                                    chipData.Remove("valueUnits");
+                                    chipData.Remove("displayUnitId");
+                                }
+
+                                var updatedEntry = new Newtonsoft.Json.Linq.JObject
+                                {
+                                    ["id"] = updateChipId,
+                                    ["label"] = label,
+                                    ["data"] = chipData
+                                };
+                                ChipStorage.Shared.SetOverride(updateChipId!, updatedEntry);
+                            }
+                        }
+                        break;
+
                     case "toggle_voice":
                         bool isActive = (bool)request["active"]; // Мгновенная активация Python через UDP
                         using (UdpClient udp = new UdpClient())

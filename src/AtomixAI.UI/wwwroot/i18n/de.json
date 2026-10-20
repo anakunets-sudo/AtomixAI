@@ -15,11 +15,16 @@
   "chat.thinking": "Logik wird erstellt...",
   "chat.cancel": "Abbrechen",
   "chat.cancelled": "Vom Benutzer abgebrochen",
+  "chat.copyMessage": "Nachricht kopieren",
+  "chat.messageCopied": "Kopiert",
+  "chat.copyFailed": "Nachricht konnte nicht kopiert werden",
 
   "input.placeholder": "Mit Livvy chatten, # für Menü",
   "input.menu": "Menü öffnen",
   "input.voice": "Spracheingabe",
   "input.send": "Senden [Enter]",
+
+  "chip.edit": "Bearbeiten",
 
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",

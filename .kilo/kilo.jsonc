@@ -12,7 +12,7 @@
         "openai/gpt-6-luna-pro": {
           "limit": {
             "context": 272000,
-            "input": 240000,
+            "input": 220000,
             "output": 32000
           }
         },
@@ -20,7 +20,7 @@
           "limit": {
             "context": 100000,
             "input": 80000,
-            "output": 8192
+            "output": 32000
           }
         }
       }
@@ -30,7 +30,7 @@
         "gpt-6.1-sol": {
           "limit": {
             "context": 272000,
-            "input": 240000,
+            "input": 220000,
             "output": 32000
           }
         }

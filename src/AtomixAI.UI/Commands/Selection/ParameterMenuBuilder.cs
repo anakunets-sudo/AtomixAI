@@ -33,7 +33,7 @@ namespace AtomixAI.UI.Commands.Selection
             return items;
         }
 
-        internal static object CreateChip(UIApplication app, string itemId)
+        internal static ChipPayload CreateChip(UIApplication app, string itemId)
         {
             string[] parts = itemId.Split(':');
             if (parts.Length != 5 || parts[0] != "param" ||
@@ -64,24 +64,23 @@ namespace AtomixAI.UI.Commands.Selection
                 throw new ArgumentException("The selected parameter is no longer available. Select it again from the menu.");
 
             bool isType = parts[4] == "1";
-            JObject data = BuildData(parameter, holder, originalElement, isType, out string unitLabel);
+            JObject data = BuildData(parameter, holder, originalElement, isType);
             string name = parameter.Definition.Name;
-            string value = data["param_Value"]?.ToString() ?? string.Empty;
-            string chipId = ChipStorage.Shared.CreatePending("#" + name, data);
-            return new
-            {
-                id = chipId,
-                chipId,
-                chipLabel = "#" + name,
-                chipTooltip = BuildTooltip(name, value, unitLabel, originalElement)
-            };
+            string value = GetDisplayValue(parameter);
+            string label = BuildChipLabel(name, value);
+            string chipId = ChipStorage.Shared.CreatePending(label, data);
+            return new ChipPayload(chipId, label, data);
         }
 
-        private static JObject BuildData(Parameter parameter, Element paramHolder, Element originalElement, bool isType, out string unitLabel)
+        // Подпись чипса: "#<Name>" для пустого значения, иначе "#<Name>: <Value>".
+        private static string BuildChipLabel(string name, string value) =>
+            string.IsNullOrEmpty(value) ? $"#{name}" : $"#{name}: {value}";
+
+        private static JObject BuildData(Parameter parameter, Element paramHolder, Element originalElement, bool isType)
         {
             string name = parameter.Definition!.Name;
             string value = GetDisplayValue(parameter);
-            unitLabel = string.Empty;
+            string unitLabel = string.Empty;
             string displayUnitId = string.Empty;
 
             if (parameter.HasValue && parameter.StorageType == StorageType.Double)
@@ -109,15 +108,17 @@ namespace AtomixAI.UI.Commands.Selection
             var data = JObject.FromObject(new
             {
                 kind = "revit_parameter",
-                param_Name = name,
-                param_Value = value,
-                param_Unit_Label = unitLabel,
-                storage_Type = parameter.StorageType.ToString(),
-                is_Type = isType,
-                has_Value = parameter.HasValue,
-                is_ReadOnly = parameter.IsReadOnly,
+                parameter_Name = name,
+                parameter_Value = value,
+                parameter_Unit_Label = unitLabel,
+                parameter_Storage_Type = parameter.StorageType.ToString(),
+                parameter_Is_Type = isType,
+                parameter_has_Value = parameter.HasValue,
+                parameter_is_ReadOnly = parameter.IsReadOnly,
                 parameter_Id = parameter.Id.GetIdValue().ToString(),
                 element_Id = originalElement.Id.GetIdValue().ToString(),
+                parameter_Is_Shared = parameter.IsShared,
+                parameter_Guid = parameter.GUID.ToString(),
                 parameter_Holder_Id = paramHolder.Id.GetIdValue().ToString(),
                 element_Name = originalElement.Name,
                 element_Сategory = originalElement.Category?.Name ?? Localizer.T("selection.noCategory"),
@@ -162,17 +163,6 @@ namespace AtomixAI.UI.Commands.Selection
 
         private static string BuildParameterItemId(Element holder, Parameter parameter, Element originalElement, bool isType) =>
             $"param:{holder.Id.GetIdValue()}:{parameter.Id.GetIdValue()}:{originalElement.Id.GetIdValue()}:{(isType ? 1 : 0)}";
-
-        private static string BuildTooltip(string name, string value, string unitLabel, Element element)
-        {
-            var parts = new List<string>();
-            if (!string.IsNullOrEmpty(value))
-                parts.Add($"Parameter: {name} = {value}" + (string.IsNullOrEmpty(unitLabel) ? string.Empty : $" {unitLabel}"));
-            parts.Add($"Element: {element.Name}");
-            if (element.Category != null) parts.Add($"Category: {element.Category.Name}");
-            parts.Add($"Id: {element.Id.GetIdValue()}");
-            return string.Join("\n", parts);
-        }
 
         private static ElementId ToElementId(long id)
         {

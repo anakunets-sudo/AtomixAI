@@ -21,34 +21,278 @@ window.Atomix.ChipsController = {
         const input = window.Atomix.EditorController.el;
         if (!input || !chip) return;
 
-        const element = chip instanceof HTMLElement
-            ? (chip.classList.contains('bim-chip') ? chip.cloneNode(true) : null)
-            : this.createElement(chip);
+        // Чипсы, которые попадают в поле ввода, редактируемые. Тултип остаётся
+        // исходным, поэтому при копировании из сообщения переносим сохранённый оригинал.
+        const originalTooltip = chip instanceof HTMLElement ? chip._originalTooltip : undefined;
+        const payload = this.getPayload(chip);
+        const element = payload
+            ? this.createElement(payload, { editable: true, originalTooltip })
+            : chip instanceof HTMLElement && chip.classList.contains('bim-chip')
+                ? chip.cloneNode(true)
+                : null;
         if (element) {
             element.contentEditable = 'false';
             this._insertTag(element, '\u00A0');
         }
     },
 
-    createElement(item) {
-        if (!item || !item.chipId) return null;
+    getPayload(item) {
+        const source = item instanceof HTMLElement ? item._chipPayload : item?.chipPayload || item;
+        if (!source || typeof source.chipId !== 'string' || !source.chipId ||
+            typeof source.chipLabel !== 'string' || !source.chipData ||
+            typeof source.chipData !== 'object' || Array.isArray(source.chipData)) return null;
+        return {
+            chipId: source.chipId,
+            chipLabel: source.chipLabel,
+            chipData: source.chipData
+        };
+    },
+
+    createElement(item, options = {}) {
+        const payload = this.getPayload(item);
+        if (!payload) return null;
         const chip = document.createElement('span');
         chip.className = 'bim-chip';
         chip.contentEditable = 'false';
-        chip.setAttribute('data-chip-id', item.chipId);
-        chip.setAttribute('data-tooltip', item.chipTooltip || '');
-        chip.textContent = item.chipLabel || item.name || '';
+        chip.setAttribute('data-chip-id', payload.chipId);
+
+        // Тултип всегда показывает исходное значение чипса и не меняется после правки.
+        const tooltip = options.originalTooltip || this.formatTooltip(payload.chipData);
+        chip.setAttribute('data-tooltip', tooltip);
+        chip._chipPayload = payload;
+        chip._originalTooltip = tooltip;
+
+        const label = document.createElement('span');
+        label.className = 'chip-label';
+        label.textContent = payload.chipLabel;
+        chip.appendChild(label);
+
+        if (options.editable) {
+            chip.classList.add('chip-editable');
+            chip.appendChild(this._createEditAffordance());
+            this._attachChipEditTrigger(chip);
+        }
         return chip;
     },
 
-    restoreMessageTooltip(element, chipsById) {
+    // Клик по любому месту чипса (при наличии карандаша) входит в режим правки,
+    // а не только клик по самому карандашу.
+    _attachChipEditTrigger(chip) {
+        if (!chip || chip._editTriggerBound) return;
+        chip._editTriggerBound = true;
+        chip.addEventListener('mousedown', (e) => {
+            if (chip._editing) return;
+            const target = e.target;
+            if (target && target.classList && target.classList.contains('chip-edit-input')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.beginEdit(chip);
+        });
+    },
+
+    _createEditAffordance() {
+        const edit = document.createElement('span');
+        edit.className = 'chip-edit';
+        edit.contentEditable = 'false';
+        edit.setAttribute('role', 'button');
+        edit.setAttribute('aria-label', 'Edit value');
+        edit.innerHTML = '<span class="chip-edit-text"></span><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+        edit.querySelector('.chip-edit-text').textContent = window.Atomix?.t
+            ? window.Atomix.t('chip.edit', 'Edit')
+            : 'Edit';
+        edit.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.beginEdit(edit.parentElement);
+        });
+        return edit;
+    },
+
+    // Кнопка подтверждения правки: появляется вместо карандаша в режиме редактирования.
+    _createConfirmAffordance(chip) {
+        const confirm = document.createElement('span');
+        confirm.className = 'chip-confirm';
+        confirm.contentEditable = 'false';
+        confirm.setAttribute('role', 'button');
+        confirm.setAttribute('aria-label', 'Confirm value');
+        confirm.innerHTML = '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>';
+        confirm.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const input = chip._editInput;
+            this.finishEdit(chip, input ? input.value : '');
+        });
+        return confirm;
+    },
+
+    // Имя параметра для подписи. Берём из данных, с откатом на разбор текущей подписи.
+    _chipName(payload) {
+        const fromData = payload && payload.chipData && payload.chipData.parameter_Name;
+        if (fromData) return String(fromData);
+        const label = (payload && payload.chipLabel) || '';
+        const match = /^#([^:]+?)(?::\s.*)?$/.exec(label);
+        return match ? match[1].trim() : label.replace(/^#/, '');
+    },
+
+    // Вход в режим правки: значение становится редактируемым прямо в пилле.
+    beginEdit(chip) {
+        if (!chip || !chip.classList.contains('bim-chip') || chip._editing) return;
+        const payload = chip._chipPayload;
+        const label = chip.querySelector('.chip-label');
+        if (!payload || !label) return;
+
+        const name = this._chipName(payload);
+        const current = chip._confirmedValue !== undefined
+            ? chip._confirmedValue
+            : (payload.chipData && payload.chipData.parameter_Value != null
+                ? String(payload.chipData.parameter_Value) : '');
+
+        chip._editing = true;
+        chip.classList.add('chip-editing');
+        label.textContent = '#' + name + ': ';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'chip-edit-input';
+        input.value = current;
+        input.setAttribute('spellcheck', 'false');
+        input.addEventListener('keydown', (e) => {
+            // Не даём Enter/Escape всплыть до поля ввода (иначе уйдёт сообщение или сработает меню).
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.finishEdit(chip, input.value);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.cancelEdit(chip);
+            }
+        });
+        input.addEventListener('mousedown', (e) => e.stopPropagation());
+        input.addEventListener('blur', () => {
+            if (chip._editing) this.finishEdit(chip, input.value);
+        });
+
+        label.appendChild(input);
+        chip._editInput = input;
+
+        const confirm = this._createConfirmAffordance(chip);
+        chip.appendChild(confirm);
+        chip._confirmEl = confirm;
+
+        input.focus();
+        input.select();
+    },
+
+    // Подтверждение правки: единственный источник правды — введённое значение.
+    finishEdit(chip, rawValue) {
+        if (!chip || !chip._editing) return;
+        const payload = chip._chipPayload;
+        const value = String(rawValue == null ? '' : rawValue).trim();
+        const name = this._chipName(payload);
+        const label = chip.querySelector('.chip-label');
+
+        chip._editing = false;
+        chip._editInput = null;
+        if (chip._confirmEl) { chip._confirmEl.remove(); chip._confirmEl = null; }
+        chip.classList.remove('chip-editing');
+        if (label) label.textContent = value ? `#${name}: ${value}` : `#${name}`;
+
+        chip._confirmedValue = value;
+        const original = payload && payload.chipData && payload.chipData.parameter_Value != null
+            ? String(payload.chipData.parameter_Value) : '';
+        chip.classList.toggle('chip-edited', value !== original);
+
+        if (payload) {
+            payload.chipLabel = label ? label.textContent : payload.chipLabel;
+            if (payload.chipData) payload.chipData.parameter_Value = value;
+        }
+
+        // Сообщаем C#: снапшот для ИИ должен содержать только подтверждённое значение.
+        if (payload && payload.chipId && window.Atomix.RevitBridge) {
+            window.Atomix.RevitBridge.send('update_chip', { id: payload.chipId, value });
+        }
+        this._refocusInput();
+    },
+
+    cancelEdit(chip) {
+        if (!chip || !chip._editing) return;
+        const payload = chip._chipPayload;
+        chip._editing = false;
+        chip._editInput = null;
+        if (chip._confirmEl) { chip._confirmEl.remove(); chip._confirmEl = null; }
+        chip.classList.remove('chip-editing');
+        const label = chip.querySelector('.chip-label');
+        if (label) label.textContent = payload ? payload.chipLabel : '';
+        this._refocusInput();
+    },
+
+    _refocusInput() {
+        const input = window.Atomix.EditorController && window.Atomix.EditorController.el;
+        if (input) input.focus();
+    },
+
+    formatTooltip(chipData) {
+        if (!chipData || typeof chipData !== 'object') return '';
+        const value = key => {
+            const raw = chipData[key];
+            return raw == null ? '' : String(raw);
+        };
+        if (value('kind') !== 'revit_parameter') return '';
+
+        const parts = [];
+        const parameterName = value('parameter_Name');
+        const parameterValue = value('parameter_Value');
+        const unitLabel = value('parameter_Unit_Label');
+
+        if (parameterName) {
+            parts.push(chipData.is_Type ? 'Type Parameter' : 'Instance Parameter');
+            if (parameterValue) {
+                parts.push(`Parameter: ${parameterName} = ${parameterValue}` + (unitLabel ? ` ${unitLabel}` : ''));
+            }
+        }
+        if (value('element_Name')) parts.push(`Element: ${value('element_Name')}`);
+        const category = value('element_Сategory') || value('element_Category');
+        if (category) parts.push(`Category: ${category}`);
+        if (value('element_Id')) parts.push(`Id: ${value('element_Id')}`);
+        return parts.join('\n');
+    },
+
+    restoreMessageTooltip(element, chipsById, options = {}) {
         if (!element || element.tagName !== 'SPAN' || !chipsById) return false;
-        const chip = chipsById.get(element.getAttribute('data-chip-id'));
-        if (!chip) return false;
+        const entry = chipsById.get(element.getAttribute('data-chip-id'));
+        const payload = this.getPayload(entry);
+        if (!payload) return false;
         element.classList.add('bim-chip');
         element.contentEditable = 'false';
-        element.setAttribute('data-tooltip', chip.chipTooltip || '');
+        // В отправленных сообщениях показываем исходное значение, а не подтверждённое.
+        const tooltip = (entry && entry.originalTooltip) || this.formatTooltip(payload.chipData);
+        element.setAttribute('data-tooltip', tooltip);
+        element._chipPayload = payload;
+        element._originalTooltip = tooltip;
+        if (options.editable) {
+            this._ensureEditableStructure(element);
+        } else {
+            element.classList.remove('chip-editable');
+            const stale = element.querySelector('.chip-edit');
+            if (stale) stale.remove();
+        }
         return true;
+    },
+
+    // Приводит чипс в поле ввода к структуре с подписью и кнопкой правки.
+    _ensureEditableStructure(chip) {
+        let label = chip.querySelector('.chip-label');
+        if (!label) {
+            label = document.createElement('span');
+            label.className = 'chip-label';
+            while (chip.firstChild) label.appendChild(chip.firstChild);
+            chip.appendChild(label);
+        }
+        chip.classList.add('chip-editable');
+        const stale = chip.querySelector('.chip-edit');
+        if (stale) stale.remove();
+        chip.appendChild(this._createEditAffordance());
+        this._attachChipEditTrigger(chip);
     },
 
     // Вставляет тег на место каретки (или в конец поля) и гарантирует, что СНАРУЖИ
@@ -110,45 +354,6 @@ window.Atomix.ChipsController = {
         const space = document.createTextNode(spaceChar);
         element.after(space);
         return space;
-    },
-
-    // Создание и вставка чипса по объекту из меню
-    create(item) {
-        const input = window.Atomix.EditorController.el;
-        if (!input || !item.meta || !item.chipId) return;
-
-        const meta = item.meta;
-
-        // Формируем красивый многострочный тултип с защитой от отсутствующих полей
-        const tooltipParts = [];
-        if (meta.paramType) tooltipParts.push(`${meta.paramType}`);
-        if (meta.paramName != null && meta.paramName !== '' && meta.paramValue != null && meta.paramValue !== '') {
-            const unitLabel = meta.unitLabel;
-            tooltipParts.push(`Parameter: ${meta.paramName} = ${meta.paramValue}` + (unitLabel != null && unitLabel !== '' ? ` ${unitLabel}` : ''));
-        }
-        if (meta.elementName) tooltipParts.push(`Element: ${meta.elementName}`);
-        if (meta.category) tooltipParts.push(`Category: ${meta.category}`);        
-        if (meta.elementId) tooltipParts.push(`Id: ${meta.elementId}`);       
-
-        const tooltipText = tooltipParts.join('\n');
-
-        // Создаем DOM-элемент чипса
-        const chip = document.createElement('span');
-        chip.className = 'bim-chip';
-        chip.contentEditable = 'false'; // Защита от редактирования по буквам
-
-        chip.setAttribute('data-chip-id', item.chipId);
-
-        // Тултип и имя оставляем как было
-        chip.setAttribute('data-tooltip', tooltipText);
-        chip.innerText = `#${meta.paramName}`;
-
-        // Тот же шаг вставки, что и у тегов: span + пробел вне span + курсор за пробелом.
-        // У чипса пробел неразрывный, чтобы он не «прилипал» к следующему слову.
-        this._insertTag(chip, '\u00A0');
-
-        // Триггерим событие изменения высоты поля, как в main.js
-        input.dispatchEvent(new Event('input'));
     },
 
     serialize(input) {

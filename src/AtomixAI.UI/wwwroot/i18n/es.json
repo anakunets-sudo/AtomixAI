@@ -15,11 +15,16 @@
   "chat.thinking": "Preparando la lógica...",
   "chat.cancel": "Cancelar",
   "chat.cancelled": "Cancelado por el usuario",
+  "chat.copyMessage": "Copiar mensaje",
+  "chat.messageCopied": "Copiado",
+  "chat.copyFailed": "No se pudo copiar el mensaje",
 
   "input.placeholder": "Chatear con Livvy, # para menú",
   "input.menu": "Abrir menú",
   "input.voice": "Entrada de voz",
   "input.send": "Enviar [Enter]",
+
+  "chip.edit": "Editar",
 
   "footer.settings": "Expandir la configuración del entorno",
   "footer.aiCore": "Núcleo de IA:",
