@@ -29,7 +29,7 @@
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",
   "footer.aiModel": "KI-Modell:",
-  "footer.modelName": "Anthropic",
+  "footer.modelName": "Google",
 
   "rate.markSolution": "Als Lösung markieren",
   "rate.markedSolution": "Als Lösung markiert",

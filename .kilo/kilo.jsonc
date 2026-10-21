@@ -33,6 +33,13 @@
             "input": 220000,
             "output": 32000
           }
+        },
+        "gpt-6-luna": {
+          "limit": {
+            "context": 272000,
+            "input": 220000,
+            "output": 32000
+          }
         }
       }
     }

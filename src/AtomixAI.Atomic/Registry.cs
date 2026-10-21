@@ -3,7 +3,6 @@ using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -59,10 +58,10 @@ using System.Text.RegularExpressions;
 
                         foreach (var sProp in schemaProps)
                         {
-                            var descAttr = sProp.GetCustomAttribute<DescriptionAttribute>();
-                            if (descAttr == null) continue;
+                            var innerParam = sProp.GetCustomAttribute<AiParamAttribute>();
+                            if (innerParam == null) continue;
 
-                            string innerDesc = descAttr.Description;
+                            string innerDesc = innerParam.Description;
                             // Инжектируем системные правила для геометрии
                             if (sProp.Name.Contains("Point") || sProp.Name.Contains("Curve"))
                                 innerDesc += " MANDATORY if Context/In is empty. Enter \"\" if Context has geometry.";
@@ -191,13 +190,8 @@ using System.Text.RegularExpressions;
                 var firstItem = group.First();
                 var fieldInfo = typeof(AtomicGroupType).GetField(firstItem.Info.Group.ToString());
 
-                System.ComponentModel.DescriptionAttribute descAttr = null;
-                if (fieldInfo != null)
-                {
-                    descAttr = (System.ComponentModel.DescriptionAttribute)Attribute.GetCustomAttribute(fieldInfo, typeof(System.ComponentModel.DescriptionAttribute));
-                }
-
-                string groupDesc = descAttr != null ? descAttr.Description : group.Key.ToString();
+                var groupParam = fieldInfo?.GetCustomAttribute<AiParamAttribute>();
+                string groupDesc = groupParam != null ? groupParam.Description : group.Key.ToString();
 
                 // Имя тега группы в верхнем регистре (CREATION, SEARCH)
                 sb.Append($"<{group.Key.ToString().ToUpper()}>\n");
@@ -249,27 +243,12 @@ using System.Text.RegularExpressions;
                                     else
                                         continue; // Если описания нет вообще — пропускаем свойство
 
-                                    // Инжектируем жесткие правила конвейера для геометрии
-                                    if (sProp.Name.Contains("Point") || sProp.Name.Contains("Curve") || sProp.Name.Contains("Location"))
-                                    {
-                                        cleanDesc += " MANDATORY if In/Context is empty. Enter \\\"\\\" if Context has geometry.";
-                                    }
-
                                     // Экранируем кавычки для XML-атрибута, чтобы промт не ломал парсер гугла
                                     innerLines.Add($"\\\\'{sProp.Name}\\\\': \\\\'{cleanDesc}\\\\'");
                                 }
 
                                 descStr = "{" + string.Join(", ", innerLines) + "}";
                             }
-                            else
-                            {
-                                // Подсказки для инфраструктурных портов
-                                if (x.Name.Equals("Context", StringComparison.OrdinalIgnoreCase) || x.Name.Equals("In", StringComparison.OrdinalIgnoreCase))
-                                    descStr = "INPUT_PORT: Accepts historical '#tag'. If the user points to a specific tag, USE IT EXACTLY.";
-                                else if (x.Name.Equals("Out", StringComparison.OrdinalIgnoreCase))
-                                    descStr = "OUTPUT_PORT: Creates a NEW unique data tag.";
-                            }
-
                             // Возвращаем ультра-короткий самозакрывающийся тег <p />
                             return $"<p n=\"{x.Name}\" t=\"{typeStr}\"{reqStr} desc=\"{descStr}\"/>";
                         }).ToArray();

@@ -307,7 +307,8 @@ namespace AtomixAI.Bridge
                                     }
                                     catch (Exception ex)
                                     {
-                                        Debug.WriteLine($"[MAPPER] Non-critical mapping fail for property '{kp.Key}': {ex.Message}");
+                                        Debug.WriteLine($"[MAPPER] Mapping failed for property '{kp.Key}': {ex.Message}");
+                                        throw;
                                     }
                                 }
                             }

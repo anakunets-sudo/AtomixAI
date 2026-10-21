@@ -1,9 +1,13 @@
-using System;
-using System.Collections.Generic;
 using AtomixAI.Core;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Data.Common;
+using System.Runtime.Serialization;
+using System.Windows.Controls;
 
 namespace AtomixAI.UI.Commands.Selection
 {
@@ -64,7 +68,7 @@ namespace AtomixAI.UI.Commands.Selection
                 throw new ArgumentException("The selected parameter is no longer available. Select it again from the menu.");
 
             bool isType = parts[4] == "1";
-            JObject data = BuildData(parameter, holder, originalElement, isType);
+            JObject data = BuildData(doc, parameter, holder, originalElement, isType);
             string name = parameter.Definition.Name;
             string value = GetDisplayValue(parameter);
             string label = BuildChipLabel(name, value);
@@ -76,7 +80,7 @@ namespace AtomixAI.UI.Commands.Selection
         private static string BuildChipLabel(string name, string value) =>
             string.IsNullOrEmpty(value) ? $"#{name}" : $"#{name}: {value}";
 
-        private static JObject BuildData(Parameter parameter, Element paramHolder, Element originalElement, bool isType)
+        private static JObject BuildData(Document doc, Parameter parameter, Element paramHolder, Element originalElement, bool isType)
         {
             string name = parameter.Definition!.Name;
             string value = GetDisplayValue(parameter);
@@ -94,7 +98,7 @@ namespace AtomixAI.UI.Commands.Selection
                         if (unitTypeId != null && !string.IsNullOrEmpty(unitTypeId.TypeId))
                         {
                             displayUnitId = unitTypeId.TypeId;
-                            unitLabel = GetShortUnitLabel(unitTypeId);
+                            unitLabel = GetShortUnitLabel(doc, unitTypeId);
                         }
                     }
                 }
@@ -118,7 +122,7 @@ namespace AtomixAI.UI.Commands.Selection
                 parameter_Id = parameter.Id.GetIdValue().ToString(),
                 element_Id = originalElement.Id.GetIdValue().ToString(),
                 parameter_Is_Shared = parameter.IsShared,
-                parameter_Guid = parameter.GUID.ToString(),
+                parameter_Guid = parameter.IsShared ? parameter.GUID.ToString() : string.Empty,
                 parameter_Holder_Id = paramHolder.Id.GetIdValue().ToString(),
                 element_Name = originalElement.Name,
                 element_Сategory = originalElement.Category?.Name ?? Localizer.T("selection.noCategory"),
@@ -173,17 +177,40 @@ namespace AtomixAI.UI.Commands.Selection
 #endif
         }
 
-        private static string GetShortUnitLabel(ForgeTypeId unitTypeId)
+        private static string GetShortUnitLabel(Document doc, ForgeTypeId unitTypeId)
         {
-            if (unitTypeId == null || string.IsNullOrEmpty(unitTypeId.TypeId)) return string.Empty;
+            if (unitTypeId == null || string.IsNullOrEmpty(unitTypeId.TypeId))
+                return string.Empty;
+
             try
             {
-                return LabelUtils.GetLabelForUnit(unitTypeId);
+                if (FormatOptions.CanHaveSymbol(unitTypeId))
+                {
+                    System.Collections.Generic.IList<ForgeTypeId> validSymbols = FormatOptions.GetValidSymbols(unitTypeId);
+
+                    // ФИКС: Пропускаем пустые "символы-пустышки" (у которых TypeId пустой)
+                    // Берем только тот ForgeTypeId, который реально имеет определение внутри Revit
+                    ForgeTypeId? defaultSymbolId = validSymbols.FirstOrDefault(s => s != null && !string.IsNullOrEmpty(s.TypeId));
+
+                    if (defaultSymbolId != null)
+                    {
+                        // Теперь сюда никогда не попадет пустой ID, и ошибки не будет
+                        string shortLabel = LabelUtils.GetLabelForSymbol(defaultSymbolId);
+
+                        System.Diagnostics.Debug.WriteLine($"[ParameterMenuBuilder] [GetShortUnitLabel] shortLabel {shortLabel}.");
+                        return shortLabel;
+                    }
+                }
+
+                return string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[ParameterMenuBuilder] [GetShortUnitLabel] Exception: {ex.Message}");
                 return string.Empty;
             }
         }
+
+
     }
 }

@@ -52,12 +52,12 @@ DEFAULT_PROVIDERS = {
         "api_key_env": "OPENROUTER_API_KEY",
         # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
         # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4-flash-0731'
-        "model": "anthropic/claude-haiku-5.5",
+        "model": "google/gemini-2.5-flash-lite",
     },
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
-        "model": "claude-haiku-5-5",
+        "model": "gemini-3.5-flash-lite",
     },
 }
 
@@ -137,8 +137,8 @@ def use_provider(name):
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
 
-PROVIDER = {"only": ["google-vertex/global"], "allow_fallbacks": False}
-PROVIDER_FLEX = {"only": ["google-vertex/global"], "allow_fallbacks": False}
+PROVIDER = {"only": ["google-ai-studio"], "allow_fallbacks": False}
+PROVIDER_FLEX = {"only": ["google-ai-studio"], "allow_fallbacks": False}
 
 """
 PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
@@ -193,11 +193,24 @@ bim_sequence_tool = {
                                 "type": "string", 
                                 "description": "The EXACT tool name from <AVAILABLE_BIM_TOOLS> (e.g., 'select_elements', 'search_init'). NEVER append numbers, indexes, or suffixes to the tool name!" 
                             },
-                            "arguments": { 
-                                "type": "object", 
-                                "description": (
-                                    "Dynamic key-value parameters. "
-                                )
+                            "arguments": {
+                                "type": "object",
+                                "properties": {
+                                    "In": {
+                                        "type": "string",
+                                        "description": "Input tag, e.g. '#init_elements_1'. Omit if the command has no input."
+                                    },
+                                    "Params": {
+                                        "type": "object",
+                                        "description": "Command parameters from AVAILABLE_BIM_TOOLS.",
+                                        "additionalProperties": True
+                                    },
+                                    "Out": {
+                                        "type": "string",
+                                        "description": "Output tag, e.g. '#walls_1'. Omit if the command has no output."
+                                    }
+                                },
+                                "additionalProperties": False
                             }
                         },
                         "required": ["name", "arguments"]
@@ -459,7 +472,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
     """Получает план ИИ, обрабатывает уточнения, отправляет команды в Revit и формирует ответ."""
     global chat_history, detected_lang, dynamic_manual, bim_sequence_tool
 
-    use_provider("openrouter")
+    use_provider("openrouter")  # Принудительно используем Teamorouter для этого сеанса
     
     log("[START] START OF SESSION (Stateless Mode via Function Calling)...") 
     
@@ -482,7 +495,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             dynamic_manual = res_manual.get("manual", "Tools are not available.")
         tools_manifest = f"<AVAILABLE_BIM_TOOLS>:\n{dynamic_manual}\n</AVAILABLE_BIM_TOOLS>\n"
 
-        #log(f"[***] AVAILABLE_BIM_TOOLS:{dynamic_manual}")
+        log(f"[***] AVAILABLE_BIM_TOOLS:{dynamic_manual}")
         
         
         current_session = [{

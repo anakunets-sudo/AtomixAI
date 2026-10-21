@@ -12,14 +12,14 @@ namespace AtomixAI.Atomic
 {
     public static class BimContractExtensions
     {
-        public static double ParseDouble(this Parameter parameter, string value, double defaultMm = 0.0)
+        public static double ParseDouble(this Parameter parameter, Document doc, string value, double defaultMm = 0.0)
         {
             if (string.IsNullOrWhiteSpace(value)) return BimUnitConverter.ConvertMmToInternal(defaultMm);
 
             try
             {
 #if REVIT2021_OR_GREATER
-                if (UnitFormatUtils.TryParse(new Units(UnitSystem.Metric), parameter.Definition.GetDataType(), value, out double valueFeet))
+                if (UnitFormatUtils.TryParse(doc.GetUnits(), parameter.Definition.GetDataType(), value, out double valueFeet))
                 {
                     return valueFeet;
                 }

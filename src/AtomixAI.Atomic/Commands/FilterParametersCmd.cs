@@ -2,6 +2,8 @@
 using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using System.Reflection.Metadata;
+using System.Windows.Controls;
 using static AtomixAI.Atomic.BimKeys;
 
 namespace AtomixAI.Atomic.Commands
@@ -99,7 +101,7 @@ namespace AtomixAI.Atomic.Commands
             return SetOutput(contract, filteredIds.Count, true, $"Filtered {filteredIds.Count} parameter elements.");
         }
 
-        private ICollection<ElementId> ResolveParameterFilter(List<ElementId> inputIds, ParamFilterSchema myParams, Document doc)
+        private ICollection<ElementId> ResolveParameterFilter(List<ElementId> inputIds, ParamFilterSchema myParams, Autodesk.Revit.DB.Document doc)
         {
             string op = myParams.Operator.ToLower();
 
@@ -151,7 +153,7 @@ namespace AtomixAI.Atomic.Commands
                             _ => new FilterNumericEquals(),
                         };
 
-                        double valDouble = param.Item1.ParseDouble(aiValueStr);
+                        double valDouble = param.Item1.ParseDouble(doc, aiValueStr);
                         ruleBase = new FilterDoubleRule(provider, doubleEvaluator, valDouble, 0.001);
                         rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
                         break;
@@ -167,7 +169,7 @@ namespace AtomixAI.Atomic.Commands
                             "!=" => new FilterNumericEquals(),
                             _ => new FilterNumericEquals(),
                         };
-                        int valInt = Convert.ToInt32(param.Item1.ParseDouble(aiValueStr)); ; // Например "1" для Boolean True
+                        int valInt = Convert.ToInt32(param.Item1.ParseDouble(doc, aiValueStr)); ; // Например "1" для Boolean True
                         ruleBase = new FilterIntegerRule(provider, intEvaluator, valInt);
                         rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
                         break;
@@ -195,15 +197,9 @@ namespace AtomixAI.Atomic.Commands
 
                     var filteredElements = collector.ToElements().Where(el =>
                     {
-                        BuiltInParameter bip;
-#if REVIT2024_OR_GREATER
-                        bip = (BuiltInParameter)param.Item1.Id.Value;
-#else
-                        bip = (BuiltInParameter)param.Item1.Id.IntegerValue;
-#endif
                         // Достаем значение параметра экземпляра или типа
-                        string actualValue = (isType ? doc.GetElement(el.GetTypeId())?.get_Parameter(bip)?.AsString() 
-                            : el.get_Parameter(bip)?.AsString()) ?? string.Empty;
+                        string actualValue = (isType ? doc.GetElement(el.GetTypeId())?.get_Parameter(param.Item1.Definition)?.AsString() 
+                            : el.get_Parameter(param.Item1.Definition)?.AsString()) ?? string.Empty;
 
                         // Применяем регистронезависимое сравнение строк средствами .NET
                         return op switch
@@ -228,7 +224,7 @@ namespace AtomixAI.Atomic.Commands
         }
 
 
-        public Tuple<Parameter, bool>? FindElementsWithParameterUltraFast(Autodesk.Revit.DB.Document doc, List<ElementId> inputIds, ParamFilterSchema myParams)
+        public Tuple<Autodesk.Revit.DB.Parameter, bool>? FindElementsWithParameterUltraFast(Autodesk.Revit.DB.Document doc, List<ElementId> inputIds, ParamFilterSchema myParams)
         {
             var parameterName = myParams.ParameterName;
 
@@ -242,84 +238,11 @@ namespace AtomixAI.Atomic.Commands
 
             System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] [FindElementsWithParameterUltraFast] first Element {firstElement.Name}.");
 
-            ElementId firstTypeId;
+            bool? isTypeParameter = null;  Guid? paramGuid = null; long parameterId = 0;
 
-            long parameterId = long.TryParse(myParams.ParameterId, out long id) ? id : 0;
+            var data = GetParameterFromChipData(doc, myParams, firstElement, parameterName, ref parameterId, ref isTypeParameter, ref paramGuid);
 
-            bool? isTypeParameter = bool.TryParse(myParams.IsType, out bool result) ? result : null;
-
-            if (parameterId < -1)
-            {
-                if (isTypeParameter.HasValue && isTypeParameter.Value == false)
-                {
-                    Parameter param = null;
-
-#if REVIT2024_OR_GREATER
-                    param = firstElement.get_Parameter((BuiltInParameter)parameterId);
-#else
-                    int paramIdInt = (int)parameterId;
-                    param = firstElement.get_Parameter(paramIdInt);
-#endif
-                    if (param != null) return new Tuple<Parameter, bool>(param, false);
-                }
-                else if (isTypeParameter.HasValue && isTypeParameter.Value)
-                {
-                    firstTypeId = firstElement.GetTypeId();
-                    if (firstTypeId != ElementId.InvalidElementId)
-                    {
-                        Element typeEl = doc.GetElement(firstTypeId);
-
-                        Parameter param = null;
-
-                        int paramIdInt = 0;
-
-#if REVIT2024_OR_GREATER
-                        param = typeEl.get_Parameter((BuiltInParameter)parameterId);
-#else
-                        int paramIdInt = (int)parameterId;
-                        param = typeEl.get_Parameter((BuiltInParameter)paramIdInt);
-#endif
-
-                        if (param != null) return new Tuple<Parameter, bool>(param, true);
-                    }
-                }
-                
-                // Если ИИ прислал конкретный ParameterId, то ищем его напрямую
-                var param_ = firstElement.get_Parameter((BuiltInParameter)parameterId);
-                
-                if (param_ != null) return new Tuple<Parameter, bool>(param_, false);
-                // Если в экземпляре нет, проверяем Тип
-                firstTypeId = firstElement.GetTypeId();
-                if (firstTypeId != ElementId.InvalidElementId)
-                {
-                    Element typeEl = doc.GetElement(firstTypeId);
-                    param_ = typeEl.get_Parameter((BuiltInParameter)parameterId);
-                    if (param_ != null) return new Tuple<Parameter, bool>(param_, true);
-                }
-            }
-            else if(parameterId > 0)
-            {
-                Guid paramGuid = Guid.TryParse(myParams.ParameterGuid, out Guid guid) ? guid : Guid.Empty;
-
-                if (paramGuid != Guid.Empty)
-                {
-                    if (isTypeParameter.HasValue && isTypeParameter.Value == false)
-                    {
-                        var param = firstElement.get_Parameter(paramGuid);
-                        if (param != null) return new Tuple<Parameter, bool>(param, false);
-                    }
-                    else if (isTypeParameter.HasValue && isTypeParameter.Value)
-                    {
-                        firstTypeId = firstElement.GetTypeId();
-                        if (firstTypeId != ElementId.InvalidElementId)
-                        {
-                            Element typeEl = doc.GetElement(firstTypeId);
-                            var param = typeEl.get_Parameter(paramGuid);
-                            if (param != null) return new Tuple<Parameter, bool>(param, true);
-                        }
-                    }
-                }
-            }
+            if(data != null) return data;
 
             // Вытаскиваем ID категории первого элемента максимально дешево (через встроенный параметр)
             ElementId firstElementCategoryId = firstElement.get_Parameter(BuiltInParameter.ELEM_CATEGORY_PARAM)?.AsElementId()
@@ -327,16 +250,17 @@ namespace AtomixAI.Atomic.Commands
 
             var p = GetParameterByEnglishName(parameterName, firstElement.Parameters);
 
-            if(p != null) return new Tuple<Parameter, bool>(p,false);
+            if(p != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(p,false);
 
-            firstTypeId = firstElement.GetTypeId();
+            ElementId firstTypeId = firstElement.GetTypeId();
+
             if (firstTypeId != ElementId.InvalidElementId)
             {
                 Element typeEl = doc.GetElement(firstTypeId);
 
                 p = GetParameterByEnglishName(parameterName, typeEl.Parameters);
 
-                if (p != null) return new Tuple<Parameter, bool>(p, true);
+                if (p != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(p, true);
             }
 
             // 1. Создаем коллектор ИСКЛЮЧИТЕЛЬНО по входящим ID.
@@ -370,22 +294,28 @@ namespace AtomixAI.Atomic.Commands
 
                     // Забираем ровно ОДИН элемент этой категории из C++ ядра (это ультра-дешево)
                     Element sampleElement = catCollector.FirstElement();
+
                     if (sampleElement == null) continue;
+
+                    var _data = GetParameterFromChipData(doc, myParams, sampleElement, parameterName, ref parameterId, ref isTypeParameter, ref paramGuid);
+
+                    if (_data != null) return _data;
 
                     // Ищем параметр в экземпляре
                     var param = GetParameterByEnglishName(parameterName, sampleElement.Parameters);
 
-                    if (param != null) return new Tuple<Parameter, bool>(param, false);
+                    if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, false);                    
 
                     // Если в экземпляре нет, проверяем Тип
                     ElementId typeId = sampleElement.GetTypeId();
+
                     if (typeId != ElementId.InvalidElementId)
                     {
                         Element typeEl = doc.GetElement(typeId);
 
                         param = GetParameterByEnglishName(parameterName, typeEl.Parameters);
 
-                        if (param != null) return new Tuple<Parameter, bool>(param, true);
+                        if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, true);
                     }
                 }
             }
@@ -393,28 +323,170 @@ namespace AtomixAI.Atomic.Commands
             return null;
         }
 
-        private Parameter? GetParameterByEnglishName(string parameterName, ParameterSet set)
+        private Tuple<Autodesk.Revit.DB.Parameter, bool>? GetParameterFromChipData(Autodesk.Revit.DB.Document doc, ParamFilterSchema myParams, Element firstElement, string parameterName, ref long parameterId, ref bool? isTypeParameter, ref Guid? paramGuid)
         {
-            foreach (Parameter p in set)
-            {
-                string englishNameFromDefinition;
 
-                // Resolve built-in parameter labels in English on all supported Revit versions.
-#if REVIT2024_OR_GREATER
-                englishNameFromDefinition = LabelUtils.GetLabelFor((BuiltInParameter) p.Id.Value, LanguageType.English_USA);
-#else
-                englishNameFromDefinition = LabelUtils.GetLabelFor((BuiltInParameter) p.Id.IntegerValue, LanguageType.English_USA);
-#endif
-                System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] [FindElementsWithParameterUltraFast] englishNameFromDefinition {englishNameFromDefinition}.");
-                // Если английское имя из внутренностей Revit совпало с тем, что прислал ИИ ("Width")
-                if (englishNameFromDefinition.Equals(parameterName, StringComparison.OrdinalIgnoreCase))
+            ElementId firstTypeId;
+
+            if (parameterId == 0)
+            {
+                parameterId = long.TryParse(myParams.ParameterId, out long id) ? id : 0;
+            }
+
+            if (parameterId < -1)
+            {
+                if (isTypeParameter == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] [FindElementsWithParameterUltraFast] Equals!");
-                    return p; // Мгновенно возвращаем этот параметр!
+                    isTypeParameter = bool.TryParse(myParams.IsType, out bool result) ? result : null;
+                }
+
+                if (isTypeParameter.HasValue && isTypeParameter.Value == false)
+                {
+                    Autodesk.Revit.DB.Parameter param = null;
+
+#if REVIT2024_OR_GREATER
+                    param = firstElement.get_Parameter((BuiltInParameter)parameterId);
+#else
+                    int paramIdInt = (int)parameterId;
+                    param = firstElement.get_Parameter(paramIdInt);
+#endif
+                    if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, false);
+                }
+                else if (isTypeParameter.HasValue && isTypeParameter.Value)
+                {
+                    firstTypeId = firstElement.GetTypeId();
+                    if (firstTypeId != ElementId.InvalidElementId)
+                    {
+                        Element typeEl = doc.GetElement(firstTypeId);
+
+                        Autodesk.Revit.DB.Parameter param = null;
+
+                        int paramIdInt = 0;
+
+#if REVIT2024_OR_GREATER
+                        param = typeEl.get_Parameter((BuiltInParameter)parameterId);
+#else
+                        int paramIdInt = (int)parameterId;
+                        param = typeEl.get_Parameter((BuiltInParameter)paramIdInt);
+#endif
+
+                        if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, true);
+                    }
+                }
+
+                // Если ИИ прислал конкретный ParameterId, то ищем его напрямую
+                var param_ = firstElement.get_Parameter((BuiltInParameter)parameterId);
+
+                if (param_ != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param_, false);
+                // Если в экземпляре нет, проверяем Тип
+                firstTypeId = firstElement.GetTypeId();
+                if (firstTypeId != ElementId.InvalidElementId)
+                {
+                    Element typeEl = doc.GetElement(firstTypeId);
+                    param_ = typeEl.get_Parameter((BuiltInParameter)parameterId);
+                    if (param_ != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param_, true);
+                }
+            }
+            else if (parameterId > 0)
+            {
+                if (isTypeParameter == null)
+                {
+                    isTypeParameter = bool.TryParse(myParams.IsType, out bool result) ? result : null;
+                }
+
+                if (paramGuid == null)
+                {
+                    paramGuid = Guid.TryParse(myParams.ParameterGuid, out Guid guid) ? guid : Guid.Empty;
+                }
+
+                if (paramGuid != Guid.Empty)
+                {
+                    if (isTypeParameter.HasValue && isTypeParameter.Value == false)
+                    {
+                        var param = firstElement.get_Parameter(paramGuid.Value);
+                        if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, false);
+                    }
+                    else if (isTypeParameter.HasValue && isTypeParameter.Value)
+                    {
+                        firstTypeId = firstElement.GetTypeId();
+                        if (firstTypeId != ElementId.InvalidElementId)
+                        {
+                            Element typeEl = doc.GetElement(firstTypeId);
+                            var param = typeEl.get_Parameter(paramGuid.Value);
+                            if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, true);
+                        }
+                    }
+                }
+                else
+                {
+                    if (isTypeParameter.HasValue && isTypeParameter.Value == false)
+                    {
+                        var param = firstElement.LookupParameter(parameterName);
+                        if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, false);
+                    }
+                    else if (isTypeParameter.HasValue && isTypeParameter.Value)
+                    {
+                        firstTypeId = firstElement.GetTypeId();
+                        if (firstTypeId != ElementId.InvalidElementId)
+                        {
+                            Element typeEl = doc.GetElement(firstTypeId);
+                            var param = typeEl.LookupParameter(parameterName);
+                            if (param != null) return new Tuple<Autodesk.Revit.DB.Parameter, bool>(param, true);
+                        }
+                    }
                 }
             }
 
             return null;
         }
+
+        private Autodesk.Revit.DB.Parameter? GetParameterByEnglishName(string parameterName, ParameterSet set)
+        {
+            // 1. Быстрая проверка входной строки имени
+            if (string.IsNullOrEmpty(parameterName)) return null;
+
+            foreach (Autodesk.Revit.DB.Parameter p in set)
+            {
+                // Защита от разрушенных или пустых объектов в памяти Revit
+                if (p == null || p.Id == null || p.Definition == null) continue;
+
+                long paramIdValue = 0;
+
+#if REVIT2024_OR_GREATER
+                paramIdValue = p.Id.Value;
+#else
+                paramIdValue = (long)p.Id.IntegerValue;
+#endif
+
+                string nameToCompare = string.Empty;
+
+                // Если ID отрицательный — это встроенный параметр (BuiltIn)
+                if (paramIdValue < -1)
+                {
+
+                    // Проверяем, существует ли такой enum в текущей версии Revit, чтобы не поймать краш
+                    if (System.Enum.IsDefined(typeof(BuiltInParameter), paramIdValue))
+                    {
+                        nameToCompare = LabelUtils.GetLabelFor((BuiltInParameter)paramIdValue, LanguageType.English_USA);
+                    }
+                }
+                else
+                {
+                    // Если ID положительный — это параметр семейства или общий параметр.
+                    // Их имена лежат прямо в определении и никогда не вызовут ошибку.
+                    nameToCompare = p.Definition.Name;
+                }
+
+                // Финальное сравнение строк без учета регистра
+                if (!string.IsNullOrEmpty(nameToCompare) && nameToCompare.Equals(parameterName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return p;
+                }
+            }
+
+            return null;
+        }
+
+
     }
 }
