@@ -51,9 +51,16 @@ DEFAULT_PROVIDERS = {
         "base_url": "https://openrouter.ai/api/v1/chat/completions",
         "api_key_env": "OPENROUTER_API_KEY",
         # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
-        # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4.1-flash-101'
+        # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4.1-flash-1017'
         "model": "deepseek/deepseek-v4.1-flash-1017",
     },
+    "openrouter-flex": {
+            "base_url": "https://openrouter.ai/api/v1/chat/completions",
+            "api_key_env": "OPENROUTER_API_KEY",
+            # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
+            # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4.1-flash-1017'
+            "model": "meta-llama/llama-3.2-3b-instruct",
+        },
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
@@ -137,13 +144,14 @@ def use_provider(name):
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
 
-PROVIDER = { "only": ["inference-net/fp8"], "allow_fallbacks": False }
-PROVIDER_FLEX = {
-    "order": ["inference-net/fp8"], 
-    "allow_fallbacks": False
-}
+PROVIDER = { "only": ["inference-net/fp8", "relace", "inference-net/us", "wafer/mxfp4"], "allow_fallbacks": True }
+PROVIDER_FLEX = { "only": ["inference-net/fp8", "relace", "inference-net/us", "wafer/mxfp4"], "allow_fallbacks": True }
 
 """
+PROVIDER = { "only": ["inference-net/fp8", "relace"], "allow_fallbacks": True }
+PROVIDER_FLEX = { "only": [""cloudflare"", "parasail/bf16"], "allow_fallbacks": True }
+
+
 PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
 PROVIDER_FLEX = {
     "order": ["google-ai-studio/flex", "google-ai-studio", "google-vertex"], 
@@ -505,9 +513,15 @@ def execute_eviction_protocol(user_text, detected_lang, headers, chip_context="[
                 )}
             ],
             "temperature": 0.6, 
-            "provider": PROVIDER_FLEX,
             "reasoning": {"effort": "low", "exclude": True, "enabled": True} 
         }
+
+        if ACTIVE_NAME == "teamoruter" and MODEL_NAME == "gpt-5.6-luna":
+            eviction_payload["service_tier"] = "fast"
+
+        if ACTIVE_NAME == "openrouter" or ACTIVE_NAME == "openrouter-flex":
+            eviction_payload["provider"] = PROVIDER_FLEX
+
         import requests
         ev_res = requests.post(FULL_URL, json=eviction_payload, headers=headers, timeout=20)
         if ev_res.status_code == 200:
@@ -667,7 +681,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # --- ШАГ 4. ЗАПРОС ПЛАНА (РЕЖИМ AUTO) --- 
         log(f">>> [LOGIC] Requesting plan from AI via Function Calling...")
         plan_payload = {
-            "model": MODEL_NAME,
+            "model": MODEL_NAME,            
             "messages": current_session,
             "tools": [sequence_tool],
             "tool_choice": {
@@ -675,7 +689,6 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 "function": {"name": "execute_bim_sequence"}
             },
             "temperature": 0.0, 
-            "provider": PROVIDER,
             "reasoning": {
                 "effort": "high",
                 "exclude": True,
@@ -686,6 +699,12 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             # "frequency_penalty": 0.0,
             # "presence_penalty": 0.0,
         }
+
+        if ACTIVE_NAME == "teamoruter" and MODEL_NAME == "gpt-5.6-luna":
+            plan_payload["service_tier"] = "fast"
+    
+        if ACTIVE_NAME == "openrouter":
+            plan_payload["provider"] = PROVIDER
         
         try:
             response = requests.post(FULL_URL, json=plan_payload, headers=headers, timeout=60)
@@ -709,6 +728,8 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
 
         # Отмена могла прийти, пока ждали план. Не выполняем sequence и не отвечаем в чат.
         exchange(client, {"action": "ping"}, generation)
+
+        use_provider("openrouter-flex")  # Возвращаемся к гибкому провайдеру для следующего запроса
     
         # -----------------------------------------------------------------
         # ШАГ 4. СЦЕНАРИЙ А: ОТВЕТ БЕЗ ВЫЗОВА ФУНКЦИИ
@@ -911,7 +932,6 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                     }
                 ],
                 "temperature": 0.3,
-                "provider": PROVIDER_FLEX,
                 "reasoning": {
                     "effort": "low",
                     "exclude": True,
@@ -919,6 +939,12 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 },
                 #"max_tokens": 4096,               
                 }
+
+            if ACTIVE_NAME == "teamoruter" and MODEL_NAME == "gpt-5.6-luna":
+                        plan_payload["service_tier"] = "fast"
+                
+            if ACTIVE_NAME == "openrouter" or ACTIVE_NAME == "openrouter-flex":
+                        plan_payload["provider"] = PROVIDER_FLEX
 
             try:
                 final_response = requests.post(FULL_URL, json=human_payload, headers=headers, timeout=60)

@@ -123,9 +123,10 @@ using System.Text;
             string jsonType = GetJsonType(type);
             var schema = new Dictionary<string, object>
             {
-                { "type", jsonType },
-                { "description", description }
+                { "type", jsonType }
             };
+            if (description != null)
+                schema["description"] = description;
 
             if (effectiveType == typeof(object))
                 schema["additionalProperties"] = true;
@@ -171,7 +172,7 @@ using System.Text;
             {
                 var attribute = property.GetCustomAttribute<AiParamAttribute>();
                 if (attribute == null) continue;
-                string propertyDescription = attribute.Description;
+                string propertyDescription = attribute.Description ?? string.Empty;
                 if (property.Name.Contains("Point") || property.Name.Contains("Curve"))
                     propertyDescription += " MANDATORY if Context/In is empty. Enter \"\" if Context has geometry.";
                 properties[property.Name] = BuildPropertySchema(property.PropertyType, propertyDescription);

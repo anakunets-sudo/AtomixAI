@@ -6,11 +6,11 @@ FEW_SHOT_EXAMPLES = [
     # Пример 1: Идеальный пример обработки неполного запроса (Сборка фокус-замка)
     {
         "role": "user", 
-        "content": "Build a wall."
+        "content": "Build a wall.",
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I need the wall length before I can create it.",
         "tool_calls": [{
             "id": "call_ex_1",
             "type": "function",
@@ -34,7 +34,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "",
+        "content": "I'll create a wall using the selected width value.",
         "tool_calls": [{
             "id": "call_ex_chip_wall",
             "type": "function",
@@ -58,7 +58,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "",
+        "content": "I'll find walls whose Mark begins with G.",
         "tool_calls": [{
             "id": "call_ex_chip_full_mapping",
             "type": "function",
@@ -82,7 +82,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "Ich suche jetzt auf der aktiven Ansicht alle Wände.",
         "tool_calls": [{
             "id": "call_ex_walls",
             "type": "function",
@@ -106,7 +106,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I'll search this view for doors and count them.",
         "tool_calls": [{
             "id": "call_ex_3",
             "type": "function",
@@ -130,7 +130,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I'll search the project for roofs on Level 2.",
         "tool_calls": [{
             "id": "call_ex_roofs_level",
             "type": "function",
@@ -154,7 +154,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I'll find roofs on this view and exclude #roof_created_1.",
         "tool_calls": [{
             "id": "call_ex_roofs_exclude",
             "type": "function",
@@ -178,7 +178,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I need to clarify which elements to select before searching.",
         "tool_calls": [{
             "id": "call_ex_ambiguous_search",
             "type": "function",
@@ -202,7 +202,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I'll find walls thicker than 200 mm on this view.",
         "tool_calls": [{
             "id": "call_ex_parameter_search",
             "type": "function",
@@ -226,7 +226,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I'm doing great and am ready to work in Revit.",
         "tool_calls": [{
             "id": "call_small_talk_1",
             "type": "function",
@@ -248,7 +248,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "Ich bin ein industrielles Sprachmodell für präzise Arbeit mit Revit.",
         "tool_calls": [{
             "id": "call_small_talk_2",
             "type": "function",
@@ -271,7 +271,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "", 
+        "content": "I will stay focused on the original Revit request and ask for the missing search scope.",
         "tool_calls": [{
             "id": "call_ex_flood_lock",
             "type": "function",
@@ -295,7 +295,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "",
+        "content": "I'll search the active view for walls whose Mark equals Garage.",
         "tool_calls": [{
             "id": "call_ex_mark_garage",
             "type": "function",
@@ -319,7 +319,7 @@ FEW_SHOT_EXAMPLES = [
     },
     {
         "role": "assistant",
-        "content": "",
+        "content": "I need the parameter name to search walls by the value's first letter.",
         "tool_calls": [{
             "id": "call_ex_ask_param_name",
             "type": "function",
