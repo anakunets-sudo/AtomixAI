@@ -265,10 +265,7 @@ namespace AtomixAI.Bridge
 
                             foreach (var kp in innerParams)
                             {
-                                // 1. Всегда пишем в базовый словарь контракта
-                                paramsContract.Set(kp.Key, kp.Value);
-
-                                // 2. Умная запись в автосвойства схемы.
+                                // Умная запись в автосвойства схемы.
                                 // Сопоставление не зависит от подчёркиваний, чтобы чипсовые ключи
                                 // ('parameter_Id', 'is_Type') привязывались к ParameterId/IsType.
                                 string normalizedKey = NormalizeKey(kp.Key);
@@ -278,38 +275,19 @@ namespace AtomixAI.Bridge
                                 {
                                     try
                                     {
-                                        if (kp.Value is JToken token)
-                                        {
-                                            if (sProp.PropertyType == typeof(List<Dictionary<string, object>>))
-                                            {
-                                                var typedList = token.ToObject<List<Dictionary<string, object>>>();
-                                                var caseInsensitiveList = typedList
-                                                    .Select(d => new Dictionary<string, object>(d, StringComparer.OrdinalIgnoreCase))
-                                                    .ToList();
-
-                                                sProp.SetValue(paramsContract, caseInsensitiveList);
-                                            }
-                                            else
-                                            {
-                                                sProp.SetValue(paramsContract, token.ToObject(sProp.PropertyType));
-                                            }
-                                        }
-                                        else if (sProp.PropertyType == typeof(string))
-                                        {
-                                            // Примитивы (bool/number) приводим к строке: иначе флаги чипса теряются.
-                                            sProp.SetValue(paramsContract, Convert.ToString(kp.Value, System.Globalization.CultureInfo.InvariantCulture));
-                                        }
-                                        else
-                                        {
-                                            // Записываем простое значение, ТОЛЬКО если это не JToken
-                                            sProp.SetValue(paramsContract, kp.Value);
-                                        }
+                                        object convertedValue = ConvertSchemaValue(kp.Value, sProp.PropertyType);
+                                        sProp.SetValue(paramsContract, convertedValue);
+                                        paramsContract.Set(kp.Key, convertedValue);
                                     }
                                     catch (Exception ex)
                                     {
                                         Debug.WriteLine($"[MAPPER] Mapping failed for property '{kp.Key}': {ex.Message}");
                                         throw;
                                     }
+                                }
+                                else
+                                {
+                                    paramsContract.Set(kp.Key, kp.Value);
                                 }
                             }
                         }
@@ -331,5 +309,60 @@ namespace AtomixAI.Bridge
         // Убирает подчёркивания: 'parameter_Id' и 'ParameterId' считаются одним ключом.
         private static string NormalizeKey(string value) =>
             string.IsNullOrEmpty(value) ? string.Empty : value.Replace("_", string.Empty);
+
+        private static object ConvertSchemaValue(object value, Type targetType)
+        {
+            Type effectiveType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+            if (value is JToken token)
+            {
+                if (token.Type == JTokenType.String && effectiveType != typeof(string))
+                {
+                    string text = token.Value<string>();
+                    if (LooksLikeJson(text))
+                        return NormalizeDictionaryValues(JsonConvert.DeserializeObject(text, targetType));
+                    return ConvertTextValue(text, effectiveType);
+                }
+
+                return NormalizeDictionaryValues(token.ToObject(targetType));
+            }
+
+            if (value is string stringValue && effectiveType != typeof(string))
+            {
+                if (LooksLikeJson(stringValue))
+                    return NormalizeDictionaryValues(JsonConvert.DeserializeObject(stringValue, targetType));
+                return ConvertTextValue(stringValue, effectiveType);
+            }
+
+            if (effectiveType == typeof(string))
+                return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+            if (effectiveType.IsInstanceOfType(value))
+                return value;
+            return NormalizeDictionaryValues(JsonConvert.DeserializeObject(JsonConvert.SerializeObject(value), targetType));
+        }
+
+        private static object ConvertTextValue(string value, Type effectiveType)
+        {
+            if (effectiveType.IsEnum)
+                return Enum.Parse(effectiveType, value, ignoreCase: true);
+            return Convert.ChangeType(value, effectiveType, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static object NormalizeDictionaryValues(object value)
+        {
+            if (value is List<Dictionary<string, object>> dictionaries)
+            {
+                return dictionaries
+                    .Select(dictionary => new Dictionary<string, object>(dictionary, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+            }
+            return value;
+        }
+
+        private static bool LooksLikeJson(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            char first = value.TrimStart()[0];
+            return first == '[' || first == '{' || first == '"';
+        }
     }
 }

@@ -10,9 +10,17 @@ class ChipContextTests(unittest.TestCase):
     def setUp(self):
         source = Path(__file__).resolve().parents[1] / "src/AtomixAI.Main/Orchestrator/orchestrator.py"
         tree = ast.parse(source.read_text(encoding="utf-8-sig"))
-        names = {"ContextStateManager", "process_ai_logic", "main"}
+        names = {"ContextStateManager", "build_bim_sequence_tool", "process_ai_logic", "main"}
         selected = [node for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name in names]
         self.plans = []
+        self.tool_catalog = [{
+            "name": "filter_elements",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"Params": {"type": "object", "properties": {"Categories": {"type": "array", "items": {"type": "string"}}}}},
+                "required": ["Params", "Out"],
+            },
+        }]
 
         def post(url, json, **kwargs):
             self.plans.append(copy.deepcopy(json))
@@ -28,8 +36,21 @@ class ChipContextTests(unittest.TestCase):
             "API_KEY": "test", "FULL_URL": "mock", "MODEL_NAME": "mock", "PROVIDER": {},
             "requests": SimpleNamespace(post=post, exceptions=SimpleNamespace(Timeout=TimeoutError)),
             "instructions": SimpleNamespace(PROFILES={"default": "rules"}, FEW_SHOT_EXAMPLES=[]),
-            "exchange": lambda *args: ({"manual": "commands", "language": "English"}, None),
-            "chat_history": [], "detected_lang": None, "dynamic_manual": None, "bim_sequence_tool": {},
+            "exchange": lambda client, payload, *args: (
+                {"tools": self.tool_catalog} if payload.get("action") == "list" else {"manual": "commands", "language": "English"}, None
+            ),
+            "chat_history": [], "detected_lang": None, "dynamic_manual": None, "bim_sequence_tool": {
+                "type": "function",
+                "function": {
+                    "name": "execute_bim_sequence",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sequence": {"type": "array", "items": {"type": "object", "properties": {"name": {}, "arguments": {}}}}
+                        }
+                    }
+                }
+            },
             "json": json, "MAX_FLOOD_ATTEMPTS": 10,
             "_sequence_has_context_param": lambda *args: False,
             "RequestAborted": type("RequestAborted", (Exception,), {}),
@@ -41,6 +62,9 @@ class ChipContextTests(unittest.TestCase):
         chips = [{"id": "chip_1", "label": "#Height", "data": {"value": 12, "units": "mm"}}]
         process = self.env["process_ai_logic"]
         self.assertEqual(process("Use [chip_1]", None, 1, chips), ("Provide a value.", False))
+        sequence_items = self.plans[-1]["tools"][0]["function"]["parameters"]["properties"]["sequence"]["items"]
+        self.assertEqual(sequence_items["anyOf"][0]["properties"]["name"]["enum"], ["filter_elements"])
+        self.assertEqual(sequence_items["anyOf"][0]["properties"]["arguments"]["properties"]["Params"]["properties"]["Categories"]["type"], "array")
         chips[0]["data"]["units"] = "changed"
         process("Use 20 instead", None, 2, [])
         content = self.plans[-1]["messages"][-1]["content"]
@@ -59,6 +83,30 @@ class ChipContextTests(unittest.TestCase):
         with self.assertRaises(self.env["RequestAborted"]):
             self.env["process_ai_logic"]("refinement", None, 1, [])
         self.assertEqual(self.env["session_state"].user_steps, [])
+
+    def test_sequence_schema_binds_arguments_to_command(self):
+        tool = {
+            "function": {
+                "parameters": {
+                    "properties": {
+                        "sequence": {"items": {"type": "object", "properties": {"name": {}, "arguments": {}}}}
+                    }
+                }
+            }
+        }
+        self.env["bim_sequence_tool"] = tool
+        schema = self.env["build_bim_sequence_tool"]([{
+            "name": "filter_elements",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"Params": {"type": "object", "properties": {"Categories": {"type": "array", "items": {"type": "string"}}}}},
+                "required": ["Params", "Out"],
+            },
+        }])
+        variants = schema["function"]["parameters"]["properties"]["sequence"]["items"]["anyOf"]
+        self.assertEqual(variants[0]["properties"]["name"]["enum"], ["filter_elements"])
+        self.assertEqual(variants[0]["properties"]["arguments"]["properties"]["Params"]["properties"]["Categories"]["type"], "array")
+        self.assertEqual(tool["function"]["parameters"]["properties"]["sequence"]["items"].get("type"), "object")
 
 
 if __name__ == "__main__":

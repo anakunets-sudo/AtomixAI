@@ -45,73 +45,21 @@ using System.Text.RegularExpressions;
                     if (prop.Name.Equals("Context", StringComparison.OrdinalIgnoreCase)) extraHint = " (Accepts historical '#tag')";
                     else if (prop.Name.Equals("Out", StringComparison.OrdinalIgnoreCase)) extraHint = " (Create new unique '#tag')";
 
-                    string jsonType = "string";
-
-                    // СВЯЩЕННЫЙ ГРААЛЬ СТЫКОВКИ JSON СХЕМЫ:
-                    // Если у атрибута задан SchemaType — это сложный вложенный объект (object)
                     if (paramAttr.SchemaType != null)
                     {
-                        jsonType = "object";
-                        // Строим вложенную JSON-схему из внутренностей класса (например, WallParamsSchema)
-                        var innerProps = new Dictionary<string, object>();
-                        var schemaProps = paramAttr.SchemaType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-                        foreach (var sProp in schemaProps)
-                        {
-                            var innerParam = sProp.GetCustomAttribute<AiParamAttribute>();
-                            if (innerParam == null) continue;
-
-                            string innerDesc = innerParam.Description;
-                            // Инжектируем системные правила для геометрии
-                            if (sProp.Name.Contains("Point") || sProp.Name.Contains("Curve"))
-                                innerDesc += " MANDATORY if Context/In is empty. Enter \"\" if Context has geometry.";
-
-                            innerProps[sProp.Name] = new
-                            {
-                                type = "string", // Все поля внутри схем ИИ заполняет как строки (координаты, имена)
-                                description = innerDesc
-                            };
-                        }
-
-                        propertiesSchema[prop.Name] = new
-                        {
-                            type = "object",
-                            description = "Structured target parameters object.",
-                            properties = innerProps
-                        };
+                        propertiesSchema[prop.Name] = BuildObjectSchema(
+                            paramAttr.SchemaType,
+                            "Structured target parameters object.");
                     }
                     else
                     {
-                        // Стандартная обработка плоских параметров
                         var propType = prop.PropertyType;
-                        jsonType = GetJsonType(propType);
-
-                        var propDef = new Dictionary<string, object>
-                        {
-                            { "type", jsonType },
-                            { "description", paramAttr.Description + extraHint + (propType == typeof(double) ? " (Specify units, e.g. '500mm')" : "") }
-                        };
-
-                        if (jsonType == "array")
-                        {
-                            Type elementType = typeof(string);
-                            if (propType.IsArray) elementType = propType.GetElementType();
-                            else if (propType.IsGenericType) elementType = propType.GetGenericArguments().FirstOrDefault() ?? typeof(string);
-
-                            if (typeof(System.Collections.IDictionary).IsAssignableFrom(elementType) || elementType == typeof(object))
-                            {
-                                propDef["items"] = new { type = "object", properties = new { } };
-                            }
-                            else
-                            {
-                                propDef["items"] = new { type = GetJsonType(elementType) };
-                            }
-                        }
-
-                        propertiesSchema[prop.Name] = propDef;
+                        string description = paramAttr.Description + extraHint +
+                            (propType == typeof(double) ? " (Specify units, e.g. '500mm')" : "");
+                        propertiesSchema[prop.Name] = BuildPropertySchema(propType, description);
                     }
 
-                    if (paramAttr.IsRequired)
+                    if (paramAttr.IsRequired || prop.Name.Equals("Out", StringComparison.OrdinalIgnoreCase))
                         requiredParams.Add(prop.Name);
                 }
 
@@ -139,15 +87,117 @@ using System.Text.RegularExpressions;
                 return "integer";
 
             if (underlyingType == typeof(double) || underlyingType == typeof(float) || underlyingType == typeof(decimal))
-                return "double";
+                return "number";
 
             if (underlyingType == typeof(bool))
                 return "boolean";
 
+            if (typeof(System.Collections.IDictionary).IsAssignableFrom(underlyingType) ||
+                (underlyingType.IsGenericType && underlyingType.GetGenericTypeDefinition() == typeof(Dictionary<,>)))
+                return "object";
+
             if (typeof(System.Collections.IEnumerable).IsAssignableFrom(underlyingType) && underlyingType != typeof(string))
                 return "array";
 
-            return "string";
+            if (underlyingType == typeof(string) || underlyingType == typeof(char) || underlyingType.IsEnum)
+                return "string";
+
+            if (underlyingType.IsValueType)
+                return "string";
+
+            return "object";
+        }
+
+        private static object BuildPropertySchema(Type type, string description)
+        {
+            Type effectiveType = Nullable.GetUnderlyingType(type) ?? type;
+            string jsonType = GetJsonType(type);
+            var schema = new Dictionary<string, object>
+            {
+                { "type", jsonType },
+                { "description", description }
+            };
+
+            if (effectiveType == typeof(object))
+                schema["additionalProperties"] = true;
+            else if (jsonType == "array")
+            {
+                Type elementType = GetElementType(type);
+                schema["items"] = BuildTypeSchema(elementType);
+            }
+            else if (jsonType == "object")
+            {
+                if (IsDictionary(type))
+                {
+                    Type valueType = type.IsGenericType ? type.GetGenericArguments()[1] : typeof(object);
+                    schema["additionalProperties"] = BuildTypeSchema(valueType);
+                }
+                else
+                {
+                    var objectSchema = BuildObjectSchema(type, null) as Dictionary<string, object>;
+                    foreach (var property in objectSchema)
+                        schema[property.Key] = property.Value;
+                }
+            }
+
+            return schema;
+        }
+
+        private static object BuildTypeSchema(Type type)
+        {
+            if (type == typeof(object))
+                return new Dictionary<string, object>
+                {
+                    { "type", "object" },
+                    { "additionalProperties", true }
+                };
+            return BuildPropertySchema(type, null);
+        }
+
+        private static object BuildObjectSchema(Type type, string description)
+        {
+            var properties = new Dictionary<string, object>();
+            var required = new List<string>();
+            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var attribute = property.GetCustomAttribute<AiParamAttribute>();
+                if (attribute == null) continue;
+                string propertyDescription = attribute.Description;
+                if (property.Name.Contains("Point") || property.Name.Contains("Curve"))
+                    propertyDescription += " MANDATORY if Context/In is empty. Enter \"\" if Context has geometry.";
+                properties[property.Name] = BuildPropertySchema(property.PropertyType, propertyDescription);
+                if (attribute.IsRequired)
+                    required.Add(property.Name);
+            }
+
+            var schema = new Dictionary<string, object>
+            {
+                { "type", "object" },
+                { "properties", properties },
+                { "required", required },
+                { "additionalProperties", false }
+            };
+            if (description != null)
+                schema["description"] = description;
+            return schema;
+        }
+
+        private static Type GetElementType(Type type)
+        {
+            if (type.IsArray) return type.GetElementType();
+            if (type.IsGenericType)
+            {
+                return type.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+            }
+            return typeof(object);
+        }
+
+        private static bool IsDictionary(Type type)
+        {
+            return typeof(System.Collections.IDictionary).IsAssignableFrom(type) ||
+                type.GetInterfaces().Append(type).Any(candidate => candidate.IsGenericType &&
+                    (candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                     candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
         }
 
 
@@ -167,6 +217,7 @@ using System.Text.RegularExpressions;
             sb.Append("6. Context Awareness: Use <ACTIVE_REVIT_MEMORY_TAGS> to see what elements are already saved in memory tags.\n");
             sb.Append("</EXECUTION_PROTOCOL>\n");
 
+            /*
             sb.Append("<MANDATORY_OUTPUT_FORMAT>\n");
             sb.Append("The output MUST strictly match this JSON structure:\n");
             sb.Append("{");
@@ -176,7 +227,8 @@ using System.Text.RegularExpressions;
             sb.Append(" ]");
             sb.Append(" }\n");
             sb.Append("</MANDATORY_OUTPUT_FORMAT>\n");
-
+            */
+            
             sb.Append("<BIM_TOOLS>\n");
 
             var commandTypes = typeof(Registry).Assembly.GetTypes()
@@ -269,6 +321,7 @@ using System.Text.RegularExpressions;
         private static string GetFriendlyTypeName(Type type)
         {
             if (type == typeof(string)) return "string";
+            if (IsDictionary(type)) return "object";
             if (type.IsArray) return "array";
             if (typeof(System.Collections.IEnumerable).IsAssignableFrom(type)) return "array";
 

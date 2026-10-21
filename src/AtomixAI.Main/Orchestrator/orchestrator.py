@@ -52,7 +52,7 @@ DEFAULT_PROVIDERS = {
         "api_key_env": "OPENROUTER_API_KEY",
         # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
         # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4-flash-0731'
-        "model": "google/gemini-2.5-flash-lite",
+        "model": "google/gemini-3.1-flash-lite",
     },
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
@@ -137,8 +137,11 @@ def use_provider(name):
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
 
-PROVIDER = {"only": ["google-ai-studio"], "allow_fallbacks": False}
-PROVIDER_FLEX = {"only": ["google-ai-studio"], "allow_fallbacks": False}
+PROVIDER = { "only": ["google-vertex", "google-ai-studio/flex"], "allow_fallbacks": True }
+PROVIDER_FLEX = {
+    "order": ["google-ai-studio/flex","google-vertex"], 
+    "allow_fallbacks": True 
+}
 
 """
 PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
@@ -426,6 +429,34 @@ def _sequence_has_context_param(sequence, context_tag):
             return True
     return False
 
+def build_bim_sequence_tool(tool_catalog):
+    """Attach the discovered command schemas to each sequence step."""
+    tool = json.loads(json.dumps(bim_sequence_tool))
+    item_schema = tool["function"]["parameters"]["properties"]["sequence"]["items"]
+    variants = []
+
+    for command in tool_catalog or []:
+        if not isinstance(command, dict):
+            continue
+        name = command.get("name")
+        input_schema = command.get("inputSchema")
+        if not isinstance(name, str) or not name or not isinstance(input_schema, dict):
+            continue
+        variants.append({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "enum": [name]},
+                "arguments": input_schema,
+            },
+            "required": ["name", "arguments"],
+            "additionalProperties": False,
+        })
+
+    if variants:
+        item_schema.clear()
+        item_schema["anyOf"] = variants
+    return tool
+
 def execute_eviction_protocol(user_text, detected_lang, headers, chip_context="[]"):
     """Запрашивает у ИИ сообщение об отмене задачи из-за флуда."""
     eviction_rules = (
@@ -490,6 +521,10 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         system_rules = instructions.PROFILES['default']
 
         res_manual, _ = exchange(client, {"action": "get_manual"}, generation)
+
+        res_tools, _ = exchange(client, {"action": "list"}, generation)
+        tool_catalog = res_tools.get("tools", []) if isinstance(res_tools, dict) else []
+        sequence_tool = build_bim_sequence_tool(tool_catalog)
 
         if dynamic_manual is None:
             dynamic_manual = res_manual.get("manual", "Tools are not available.")
@@ -637,7 +672,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         plan_payload = {
             "model": MODEL_NAME,
             "messages": current_session,
-            "tools": [bim_sequence_tool],
+            "tools": [sequence_tool],
             "tool_choice": {
                 "type": "function",
                 "function": {"name": "execute_bim_sequence"}
