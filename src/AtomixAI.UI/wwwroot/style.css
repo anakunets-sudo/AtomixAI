@@ -164,6 +164,7 @@ body {
     font-size: 14px;
     word-wrap: break-word;
     font-family: "Segoe UI Symbol", "Segoe UI", Arial, sans-serif;
+    max-width: calc(100% - 26px);
 }
 
 .user {

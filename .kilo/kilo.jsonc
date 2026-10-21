@@ -1,7 +1,12 @@
 {
   "$schema": "https://app.kilo.ai/config.json",
   "permission": {
-    "task": "allow"
+    "task": "allow",
+    "read": {
+      //".kilo/*": "deny",
+      ".kilo/agents/**": "allow",
+      ".kilo/plans/**": "allow"
+    }
   },
   "compaction": {
     "auto": true

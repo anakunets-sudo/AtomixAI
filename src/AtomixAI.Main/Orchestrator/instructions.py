@@ -343,7 +343,7 @@ BASE_TECH_RULES = """
 <TECHNICAL_STANDARD>
 
 <TOOL_NAME_RULES>
-CRITICAL: Tool names are STATIC identifiers from <AVAILABLE_BIM_TOOLS> (e.g. "select_elements", "filter_elements").
+CRITICAL: Tool names are STATIC identifiers from the Function Calling catalog and exact enum-constrained command names (e.g. "select_elements", "filter_elements").
 - NEVER add numbers or suffixes to tool names (e.g., "select_elements_1" or "select_elements_2" DO NOT EXIST and will crash).
 - Only 'Out' and 'In' tags start with '#' and have index numbers (e.g., "Out": "#selected_elements_1").
 </TOOL_NAME_RULES>

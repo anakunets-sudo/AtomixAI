@@ -51,13 +51,13 @@ DEFAULT_PROVIDERS = {
         "base_url": "https://openrouter.ai/api/v1/chat/completions",
         "api_key_env": "OPENROUTER_API_KEY",
         # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
-        # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4-flash-0731'
-        "model": "google/gemini-3.1-flash-lite",
+        # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4.1-flash-101'
+        "model": "deepseek/deepseek-v4.1-flash-1017",
     },
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
-        "model": "gemini-3.5-flash-lite",
+        "model": "gpt-5.6-luna",
     },
 }
 
@@ -137,10 +137,10 @@ def use_provider(name):
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
 
-PROVIDER = { "only": ["google-vertex", "google-ai-studio/flex"], "allow_fallbacks": True }
+PROVIDER = { "only": ["inference-net/fp8"], "allow_fallbacks": False }
 PROVIDER_FLEX = {
-    "order": ["google-ai-studio/flex","google-vertex"], 
-    "allow_fallbacks": True 
+    "order": ["inference-net/fp8"], 
+    "allow_fallbacks": False
 }
 
 """
@@ -194,7 +194,7 @@ bim_sequence_tool = {
                         "properties": {
                             "name": { 
                                 "type": "string", 
-                                "description": "The EXACT tool name from <AVAILABLE_BIM_TOOLS> (e.g., 'select_elements', 'search_init'). NEVER append numbers, indexes, or suffixes to the tool name!" 
+                                "description": "The exact command name from this Function Calling catalog. NEVER append numbers, indexes, or suffixes to the tool name!"
                             },
                             "arguments": {
                                 "type": "object",
@@ -205,7 +205,7 @@ bim_sequence_tool = {
                                     },
                                     "Params": {
                                         "type": "object",
-                                        "description": "Command parameters from AVAILABLE_BIM_TOOLS.",
+                                        "description": "Arguments matching the selected command's Function Calling schema.",
                                         "additionalProperties": True
                                     },
                                     "Out": {
@@ -395,8 +395,6 @@ class ContextStateManager:
 # Инициализация глобального стейта памяти сессии
 session_state = ContextStateManager()
 
-dynamic_manual = None
-
 def _sequence_has_context_param(sequence, context_tag):
     """True if active_context_tag like 'filter_parameters:ParameterValue' is already filled in sequence."""
     if not sequence or not context_tag or ":" not in str(context_tag):
@@ -430,27 +428,49 @@ def _sequence_has_context_param(sequence, context_tag):
     return False
 
 def build_bim_sequence_tool(tool_catalog):
-    """Attach the discovered command schemas to each sequence step."""
+    """Flatten the grouped command catalog into sequence Function Calling variants."""
     tool = json.loads(json.dumps(bim_sequence_tool))
+    function = tool["function"]
     item_schema = tool["function"]["parameters"]["properties"]["sequence"]["items"]
     variants = []
+    category_descriptions = []
 
-    for command in tool_catalog or []:
-        if not isinstance(command, dict):
+    groups = tool_catalog.get("bim_tools", {}) if isinstance(tool_catalog, dict) else {}
+    for group_name, group in groups.items():
+        if not isinstance(group, dict):
             continue
-        name = command.get("name")
-        input_schema = command.get("inputSchema")
-        if not isinstance(name, str) or not name or not isinstance(input_schema, dict):
+        category_description = group.get("category_description")
+        if isinstance(category_description, str) and category_description:
+            category_descriptions.append(f"{group_name}: {category_description}")
+        commands = group.get("tools", [])
+        if not isinstance(commands, list):
             continue
-        variants.append({
-            "type": "object",
-            "properties": {
-                "name": {"type": "string", "enum": [name]},
-                "arguments": input_schema,
-            },
-            "required": ["name", "arguments"],
-            "additionalProperties": False,
-        })
+        for command in commands:
+            if not isinstance(command, dict):
+                continue
+            name = command.get("name")
+            parameters = command.get("parameters")
+            if not isinstance(name, str) or not name or not isinstance(parameters, dict):
+                continue
+            keywords = command.get("keywords") or []
+            if not isinstance(keywords, list):
+                keywords = []
+            name_description = f"{group_name} command: {command.get('description') or ''}"
+            if keywords:
+                name_description += " Keywords: " + ", ".join(str(keyword) for keyword in keywords)
+            variants.append({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "enum": [name], "description": name_description},
+                    "arguments": parameters,
+                },
+                "required": ["name", "arguments"],
+                "additionalProperties": False,
+            })
+
+    if category_descriptions:
+        function["description"] = function.get("description", "Executes a pipeline of atomic Revit commands based on user request.")
+        function["description"] += " Categories: " + " ".join(category_descriptions)
 
     if variants:
         item_schema.clear()
@@ -501,7 +521,7 @@ def execute_eviction_protocol(user_text, detected_lang, headers, chip_context="[
 
 def process_ai_logic(user_text, client, generation=0, chips=None):
     """Получает план ИИ, обрабатывает уточнения, отправляет команды в Revit и формирует ответ."""
-    global chat_history, detected_lang, dynamic_manual, bim_sequence_tool
+    global chat_history, detected_lang, bim_sequence_tool
 
     use_provider("openrouter")  # Принудительно используем Teamorouter для этого сеанса
     
@@ -520,44 +540,21 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # --- 1. СИНХРОНИЗАЦИЯ С REVIT (СТАТИЧНАЯ ЧАСТЬ ДЛЯ КЭША) ---
         system_rules = instructions.PROFILES['default']
 
-        res_manual, _ = exchange(client, {"action": "get_manual"}, generation)
-
         res_tools, _ = exchange(client, {"action": "list"}, generation)
-        tool_catalog = res_tools.get("tools", []) if isinstance(res_tools, dict) else []
-        sequence_tool = build_bim_sequence_tool(tool_catalog)
-
-        if dynamic_manual is None:
-            dynamic_manual = res_manual.get("manual", "Tools are not available.")
-        tools_manifest = f"<AVAILABLE_BIM_TOOLS>:\n{dynamic_manual}\n</AVAILABLE_BIM_TOOLS>\n"
-
-        log(f"[***] AVAILABLE_BIM_TOOLS:{dynamic_manual}")
-        
-        
-        current_session = [{
-            'role': 'system',
-            'content': [
-                {"type": "test", "text": system_rules},
-                {"type": "text", "text": tools_manifest, "cache_control": {"type": "ephemeral"}},
-            ]
-        }]
-        
-        """
-        # Замок кэша ставится на САМОЕ ПОСЛЕДНЕЕ сообщение из вашего списка примеров
-        instructions.FEW_SHOT_EXAMPLES[-1]["cache_control"] = {"type": "ephemeral"}
-
-        current_session = [
-            # 1. Сначала идет система
-            {"role": "system", "content": f"{system_rules}\n\n{tools_manifest}", "cache_control": {"type": "ephemeral"}},
-            *instructions.FEW_SHOT_EXAMPLES 
-        ]
-        """
+        log(">>> [BIM TOOL CATALOG] Доступные инструменты (исходный JSON-каталог):")
+        try:
+            log(json.dumps(res_tools, ensure_ascii=False, indent=2))
+        except (TypeError, ValueError):
+            log(str(res_tools))
+        sequence_tool = build_bim_sequence_tool(res_tools)
+        log(">>> [BIM TOOL CATALOG] Схема инструмента, передаваемая ИИ:")
+        log(json.dumps(sequence_tool, ensure_ascii=False, indent=2))
         
         # Создаем базовую сессию
         current_session = [{
             'role': 'system',
             'content': [
                 {"type": "text", "text": system_rules},
-                {"type": "text", "text": tools_manifest, "cache_control": {"type": "ephemeral"}}, # ФИКСИРУЕМ КЭШ ЗДЕСЬ
             ]
         }]
 
@@ -684,7 +681,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 "exclude": True,
                 "enabled": True
             },
-            "max_tokens": 8192,
+            #"max_tokens": 8192,
             # "top_p": 0.01,
             # "frequency_penalty": 0.0,
             # "presence_penalty": 0.0,
@@ -920,7 +917,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                     "exclude": True,
                     "enabled": True
                 },
-                "max_tokens": 4096,               
+                #"max_tokens": 4096,               
                 }
 
             try:

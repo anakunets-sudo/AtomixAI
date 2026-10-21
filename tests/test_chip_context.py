@@ -13,14 +13,27 @@ class ChipContextTests(unittest.TestCase):
         names = {"ContextStateManager", "build_bim_sequence_tool", "process_ai_logic", "main"}
         selected = [node for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name in names]
         self.plans = []
-        self.tool_catalog = [{
-            "name": "filter_elements",
-            "inputSchema": {
-                "type": "object",
-                "properties": {"Params": {"type": "object", "properties": {"Categories": {"type": "array", "items": {"type": "string"}}}}},
-                "required": ["Params", "Out"],
-            },
-        }]
+        self.actions = []
+        self.tool_catalog = {"bim_tools": {
+            "SEARCH": {
+                "category_description": "SAFE: Find and filter elements.",
+                "tools": [{
+                    "name": "filter_elements",
+                    "keywords": ["filter", "category", "class"],
+                    "description": "Filter elements by category or class.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"Params": {"type": "object", "properties": {"Categories": {"type": "array", "items": {"type": "string"}}}}},
+                        "required": ["Params", "Out"],
+                    },
+                }, {
+                    "name": "select_elements",
+                    "keywords": ["select", "highlight"],
+                    "description": "Select a saved set of elements.",
+                    "parameters": {"type": "object", "properties": {"In": {"type": "string"}}, "required": ["In", "Out"]},
+                }],
+            }
+        }}
 
         def post(url, json, **kwargs):
             self.plans.append(copy.deepcopy(json))
@@ -31,15 +44,22 @@ class ChipContextTests(unittest.TestCase):
                 }}}]}}]
             })
 
+        def exchange(client, payload, *args):
+            action = payload.get("action")
+            self.actions.append(action)
+            if action == "list":
+                return self.tool_catalog, None
+            if action == "get_context_state":
+                return {"tags": "There are no active tags in memory.", "recent_user_tags": ""}, None
+            return {"language": "English"}, None
+
         self.env = {
             "use_provider": lambda *args: None, "log": lambda *args: None,
             "API_KEY": "test", "FULL_URL": "mock", "MODEL_NAME": "mock", "PROVIDER": {},
             "requests": SimpleNamespace(post=post, exceptions=SimpleNamespace(Timeout=TimeoutError)),
             "instructions": SimpleNamespace(PROFILES={"default": "rules"}, FEW_SHOT_EXAMPLES=[]),
-            "exchange": lambda client, payload, *args: (
-                {"tools": self.tool_catalog} if payload.get("action") == "list" else {"manual": "commands", "language": "English"}, None
-            ),
-            "chat_history": [], "detected_lang": None, "dynamic_manual": None, "bim_sequence_tool": {
+            "exchange": exchange,
+            "chat_history": [], "detected_lang": None, "bim_sequence_tool": {
                 "type": "function",
                 "function": {
                     "name": "execute_bim_sequence",
@@ -63,8 +83,18 @@ class ChipContextTests(unittest.TestCase):
         process = self.env["process_ai_logic"]
         self.assertEqual(process("Use [chip_1]", None, 1, chips), ("Provide a value.", False))
         sequence_items = self.plans[-1]["tools"][0]["function"]["parameters"]["properties"]["sequence"]["items"]
+        self.assertEqual(len(sequence_items["anyOf"]), 2)
         self.assertEqual(sequence_items["anyOf"][0]["properties"]["name"]["enum"], ["filter_elements"])
-        self.assertEqual(sequence_items["anyOf"][0]["properties"]["arguments"]["properties"]["Params"]["properties"]["Categories"]["type"], "array")
+        self.assertIn("SEARCH: SAFE: Find and filter elements.", self.plans[-1]["tools"][0]["function"]["description"])
+        self.assertEqual(self.plans[-1]["tools"][0]["function"]["description"].count("SAFE: Find and filter elements."), 1)
+        name_schema = sequence_items["anyOf"][0]["properties"]["name"]
+        self.assertIn("SEARCH command: Filter elements by category or class.", name_schema["description"])
+        self.assertIn("filter, category, class", name_schema["description"])
+        arguments_schema = sequence_items["anyOf"][0]["properties"]["arguments"]
+        self.assertEqual(arguments_schema["properties"]["Params"]["properties"]["Categories"]["type"], "array")
+        self.assertIsInstance(arguments_schema["required"], list)
+        self.assertIn("Out", arguments_schema["required"])
+        self.assertNotIn("get_manual", self.actions)
         chips[0]["data"]["units"] = "changed"
         process("Use 20 instead", None, 2, [])
         content = self.plans[-1]["messages"][-1]["content"]
@@ -88,6 +118,7 @@ class ChipContextTests(unittest.TestCase):
         tool = {
             "function": {
                 "parameters": {
+                    "description": "Executes a pipeline.",
                     "properties": {
                         "sequence": {"items": {"type": "object", "properties": {"name": {}, "arguments": {}}}}
                     }
@@ -95,16 +126,11 @@ class ChipContextTests(unittest.TestCase):
             }
         }
         self.env["bim_sequence_tool"] = tool
-        schema = self.env["build_bim_sequence_tool"]([{
-            "name": "filter_elements",
-            "inputSchema": {
-                "type": "object",
-                "properties": {"Params": {"type": "object", "properties": {"Categories": {"type": "array", "items": {"type": "string"}}}}},
-                "required": ["Params", "Out"],
-            },
-        }])
+        schema = self.env["build_bim_sequence_tool"](self.tool_catalog)
         variants = schema["function"]["parameters"]["properties"]["sequence"]["items"]["anyOf"]
         self.assertEqual(variants[0]["properties"]["name"]["enum"], ["filter_elements"])
+        self.assertIn("SEARCH command", variants[0]["properties"]["name"]["description"])
+        self.assertIn("filter, category, class", variants[0]["properties"]["name"]["description"])
         self.assertEqual(variants[0]["properties"]["arguments"]["properties"]["Params"]["properties"]["Categories"]["type"], "array")
         self.assertEqual(tool["function"]["parameters"]["properties"]["sequence"]["items"].get("type"), "object")
 

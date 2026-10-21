@@ -194,10 +194,6 @@ namespace AtomixAI.Bridge
                 if (action == "get_language")
                     return JsonConvert.SerializeObject(new { language = Thread.CurrentThread.CurrentUICulture.Parent.EnglishName }); 
 
-                // ИСПРАВЛЕНО: Теперь всегда возвращаем JSON объект для Python
-                if (action == "get_manual")
-                    return JsonConvert.SerializeObject(new { manual = Registry.GetAiManual() });
-
                 if (action == "get_context_state")
                     return JsonConvert.SerializeObject(new { tags = Registry.GetActiveContentStateTags(), recent_user_tags = Registry.GetRecentUserTagsState() });
 
