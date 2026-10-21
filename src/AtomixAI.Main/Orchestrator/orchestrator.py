@@ -59,7 +59,7 @@ DEFAULT_PROVIDERS = {
             "api_key_env": "OPENROUTER_API_KEY",
             # опробованные модели: 'openai/gpt-oss-safeguard-20b', 'openai/gpt-5-nano',
             # 'google/gemini-2.5-flash-lite', 'deepseek/deepseek-v4.1-flash-1017'
-            "model": "meta-llama/llama-3.2-3b-instruct",
+            "model": "deepseek/deepseek-v4.1-flash-1017",
         },
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
@@ -72,6 +72,21 @@ USER_CFG = os.path.join(
     os.environ.get("APPDATA", os.path.expanduser("~")), "AtomixAI", "providers.json"
 )
 
+PROVIDER = { "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4"], "allow_fallbacks": True, "sort": "throughput" }
+
+PROVIDER_FLEX = { "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4"], "allow_fallbacks": True, "sort": "throughput" }
+
+"""
+PROVIDER = { "only": ["inference-net/fp8", "relace"], "allow_fallbacks": True }
+PROVIDER_FLEX = { "only": ["azure/swedencentral"], "allow_fallbacks": True }
+
+
+PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
+PROVIDER_FLEX = {
+    "order": ["google-ai-studio/flex", "google-ai-studio", "google-vertex"], 
+    "allow_fallbacks": True 
+}
+"""
 
 def load_providers():
     """Дефолты + опциональные переопределения из %APPDATA% (вне репозитория)."""
@@ -143,21 +158,6 @@ def use_provider(name):
 
 if not API_KEY:
     log(f"[!] {PROVIDERS[ACTIVE_NAME].get('api_key_env')} is empty — set it in the environment or in %APPDATA%\\AtomixAI\\providers.json")
-
-PROVIDER = { "only": ["inference-net/fp8", "relace", "inference-net/us", "wafer/mxfp4"], "allow_fallbacks": True }
-PROVIDER_FLEX = { "only": ["inference-net/fp8", "relace", "inference-net/us", "wafer/mxfp4"], "allow_fallbacks": True }
-
-"""
-PROVIDER = { "only": ["inference-net/fp8", "relace"], "allow_fallbacks": True }
-PROVIDER_FLEX = { "only": [""cloudflare"", "parasail/bf16"], "allow_fallbacks": True }
-
-
-PROVIDER = { "only": ["google-vertex", "google-vertex/en", "google-ai-studio"], "allow_fallbacks": True }
-PROVIDER_FLEX = {
-    "order": ["google-ai-studio/flex", "google-ai-studio", "google-vertex"], 
-    "allow_fallbacks": True 
-}
-"""
 
 # '{"only": ["groq"],"allow_fallbacks": false}'
 # 'deepseek/deepseek-v4-flash-0731'
@@ -377,6 +377,10 @@ detected_lang = None  # Будет определен при первом зап
 # --- ШАГ 1. РЕГИСТРАЦИЯ СТЕЙТ-МЕНЕДЖЕРА И ЛИМИТА ФЛУДА (State-Tagged Prompt Hydration) ---
 MAX_FLOOD_ATTEMPTS = 2  # 1 — раз дает пофлудить или неправильную попытку, на 2-й раз динамический сброс
 
+# Троттлинг снапшотов стрима в UI (каждый снапшот — синхронный pipe round-trip).
+STREAM_FLUSH_MS = 100
+STREAM_FLUSH_CHARS = 12
+
 class ContextStateManager:
     def __init__(self):
         """Создает состояние уточнений запроса и счетчик флуда."""
@@ -485,7 +489,125 @@ def build_bim_sequence_tool(tool_catalog):
         item_schema["anyOf"] = variants
     return tool
 
-def execute_eviction_protocol(user_text, detected_lang, headers, chip_context="[]"):
+def _push_stream_snapshot(client, text, generation=0):
+    """Отправляет в UI накопленный текст стрима. Abort после начала ответа не фатален."""
+    try:
+        _, ui_event = client.send_receive({
+            "action": "ui_log",
+            "role": "ai",
+            "phase": "stream",
+            "content": text,
+            "turn": generation,
+        })
+        if _is_abort_event(ui_event, generation):
+            log("[STREAM] abort ignored after text")
+    except Exception as ex:
+        log(f"[STREAM] Snapshot delivery failed: {ex}")
+
+def stream_completion(payload, headers, client, generation=0, timeout=60, log_tag="STREAM"):
+    """Выполняет chat/completions со stream=true и показывает текст по мере генерации.
+
+    Возвращает (text, streamed_any, error_kind):
+      text        — накопленный (или частичный при обрыве) текст ответа;
+      streamed_any— True, если текст пришёл через SSE-дельты (снапшоты уже отправлены);
+      error_kind  — None | "http:<status>" | "json" | "timeout" | "network".
+    """
+    request_payload = dict(payload)
+    request_payload["stream"] = True
+
+    text = ""
+    streamed_any = False
+    last_flush_at = 0.0
+    last_flush_len = 0
+
+    def flush(force=False):
+        """Снапшот не чаще STREAM_FLUSH_MS и/или прироста STREAM_FLUSH_CHARS."""
+        nonlocal last_flush_at, last_flush_len
+        if not text or len(text) == last_flush_len:
+            return
+        now = time.monotonic()
+        if not force and last_flush_len:
+            grew_enough = len(text) - last_flush_len >= STREAM_FLUSH_CHARS
+            waited_enough = (now - last_flush_at) * 1000 >= STREAM_FLUSH_MS
+            if not grew_enough and not waited_enough:
+                return
+        last_flush_at = now
+        last_flush_len = len(text)
+        _push_stream_snapshot(client, text, generation)
+
+    try:
+        with requests.post(FULL_URL, json=request_payload, headers=headers, stream=True, timeout=timeout) as response:
+            if response.status_code != 200:
+                log(f"[!] {log_tag} API returned HTTP {response.status_code}: {response.text}")
+                return "", False, f"http:{response.status_code}"
+
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if "application/json" in content_type:
+                # Провайдер проигнорировал stream=true — разбираем обычный JSON-ответ.
+                try:
+                    fallback_data = response.json()
+                    fallback_text = fallback_data["choices"][0]["message"]["content"]
+                except Exception as json_err:
+                    log(f"[!] {log_tag} non-SSE JSON parse failed: {json_err}")
+                    return "", False, "json"
+                fallback_text = fallback_text if isinstance(fallback_text, str) else ""
+                log(f"[{log_tag}] Provider ignored stream=true; non-SSE fallback ({len(fallback_text)} chars).")
+                return fallback_text, False, None
+
+            for raw_line in response.iter_lines(decode_unicode=False):
+                if not raw_line:
+                    continue
+                if isinstance(raw_line, bytes):
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                else:
+                    line = str(raw_line).strip()
+                if not line or line.startswith(":"):
+                    continue  # keep-alive комментарий (: OPENROUTER PROCESSING)
+                if not line.startswith("data:"):
+                    continue
+                chunk = line[len("data:"):].strip()
+                if not chunk:
+                    continue
+                if chunk == "[DONE]":
+                    break
+                try:
+                    event = json.loads(chunk)
+                except ValueError:
+                    log(f"[STREAM] Skipped malformed SSE chunk: {chunk[:200]}")
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                if event.get("error"):
+                    log(f"[!] {log_tag} stream error event: {event.get('error')}")
+                    break
+                choices = event.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                piece = delta.get("content")
+                if not isinstance(piece, str) or not piece:
+                    continue  # reasoning/reasoning_content игнорируем
+                text += piece
+                streamed_any = True
+                flush()
+
+            flush(force=True)
+
+            if streamed_any and text:
+                log(f"[STREAM] {log_tag} streamed {len(text)} chars.")
+            elif not text:
+                log(f"[!] {log_tag} stream produced no text.")
+            return text, streamed_any, None
+    except requests.exceptions.Timeout as timeout_err:
+        log(f"[!] {log_tag} stream timeout: {timeout_err}")
+        flush(force=True)
+        return text, streamed_any, "timeout"
+    except Exception as stream_err:
+        log(f"[!] {log_tag} stream failed: {stream_err}")
+        flush(force=True)
+        return text, streamed_any, "network"
+
+def execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context="[]"):
     """Запрашивает у ИИ сообщение об отмене задачи из-за флуда."""
     eviction_rules = (
         f"<TRANSACTION_EVICTION_PROTOCOL>\n"
@@ -522,20 +644,26 @@ def execute_eviction_protocol(user_text, detected_lang, headers, chip_context="[
         if ACTIVE_NAME == "openrouter" or ACTIVE_NAME == "openrouter-flex":
             eviction_payload["provider"] = PROVIDER_FLEX
 
-        import requests
-        ev_res = requests.post(FULL_URL, json=eviction_payload, headers=headers, timeout=20)
-        if ev_res.status_code == 200:
-            return ev_res.json()["choices"][0]["message"]["content"]
-        else:
-            log(f"[!] Eviction API returned HTTP {ev_res.status_code}: {ev_res.text}")
-            return f"System Error: API returned HTTP {ev_res.status_code} during eviction query."
+        eviction_text, _, eviction_error = stream_completion(
+            eviction_payload, headers, client, generation, timeout=20, log_tag="EVICTION"
+        )
+        if eviction_text.strip():
+            return eviction_text
+
+        log(f"[!] Eviction response was empty (error: {eviction_error}).")
+        if eviction_error and eviction_error.startswith("http"):
+            status = eviction_error.split(":", 1)[1] if ":" in eviction_error else "unknown"
+            return f"System Error: API returned HTTP {status} during eviction query."
+        return "System Error: Network connection failed during eviction processing."
     except Exception as ev_err:
         log(f"[!] Dynamic eviction network failure: {ev_err}")
         return f"System Error: Network connection failed during eviction processing."
 
+res_tools = None; sequence_tool = None  # Кэш каталога инструментов и схемы для ИИ
+
 def process_ai_logic(user_text, client, generation=0, chips=None):
     """Получает план ИИ, обрабатывает уточнения, отправляет команды в Revit и формирует ответ."""
-    global chat_history, detected_lang, bim_sequence_tool
+    global chat_history, detected_lang, bim_sequence_tool, res_tools, sequence_tool
 
     use_provider("openrouter")  # Принудительно используем Teamorouter для этого сеанса
     
@@ -554,15 +682,16 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # --- 1. СИНХРОНИЗАЦИЯ С REVIT (СТАТИЧНАЯ ЧАСТЬ ДЛЯ КЭША) ---
         system_rules = instructions.PROFILES['default']
 
-        res_tools, _ = exchange(client, {"action": "list"}, generation)
-        log(">>> [BIM TOOL CATALOG] Доступные инструменты (исходный JSON-каталог):")
-        try:
-            log(json.dumps(res_tools, ensure_ascii=False, indent=2))
-        except (TypeError, ValueError):
-            log(str(res_tools))
-        sequence_tool = build_bim_sequence_tool(res_tools)
-        log(">>> [BIM TOOL CATALOG] Схема инструмента, передаваемая ИИ:")
-        log(json.dumps(sequence_tool, ensure_ascii=False, indent=2))
+        if sequence_tool is None:
+            res_tools, _ = exchange(client, {"action": "list"}, generation)
+            """log(">>> [BIM TOOL CATALOG] Доступные инструменты (исходный JSON-каталог):")
+            try:
+                log(json.dumps(res_tools, ensure_ascii=False, indent=2))
+            except (TypeError, ValueError):
+                log(str(res_tools))"""
+            sequence_tool = build_bim_sequence_tool(res_tools)
+            """log(">>> [BIM TOOL CATALOG] Схема инструмента, передаваемая ИИ:")
+            log(json.dumps(sequence_tool, ensure_ascii=False, indent=2))"""
         
         # Создаем базовую сессию
         current_session = [{
@@ -572,12 +701,13 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             ]
         }]
 
+        # Подключаем Few-Shot примеры
+        current_session.extend(instructions.FEW_SHOT_EXAMPLES) 
+
         # =================================================================
         # ГРАНИЦА КЭША СЕРВЕРА ЗДЕСЬ. ВСЁ, ЧТО НИЖЕ — СБОРКА ОДНОГО ДИНАМИЧЕСКОГО ХВОСТА
         # ================================================================= 
-
-        # Подключаем Few-Shot примеры
-        current_session.extend(instructions.FEW_SHOT_EXAMPLES) 
+        
 
         if detected_lang is None:
             res_lang, _  = exchange(client, {"action": "get_language"}, generation)
@@ -780,7 +910,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
                 log(f"[-] Flood limit blown in Scenario B. Dropping context dynamically.")
                 session_state.clear()
-                return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string), False
+                return execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context_string), False
 
             if ai_user_msg:
                 return ai_user_msg, False
@@ -794,7 +924,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
                     log("[-] Empty sequence flood limit blown in Scenario B. Clearing state.")
                     session_state.clear()
-                    return execute_eviction_protocol(user_text, detected_lang, headers, chip_context_string), False
+                    return execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context_string), False
             
             if ai_user_msg:
                 return ai_user_msg, False
@@ -933,7 +1063,7 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                 ],
                 "temperature": 0.3,
                 "reasoning": {
-                    "effort": "low",
+                    "effort": "medium",
                     "exclude": True,
                     "enabled": True
                 },
@@ -947,20 +1077,24 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
                         plan_payload["provider"] = PROVIDER_FLEX
 
             try:
-                final_response = requests.post(FULL_URL, json=human_payload, headers=headers, timeout=60)
-                final_response.raise_for_status()
-                final_data = final_response.json()
-                final_report_text = final_data["choices"][0]["message"]["content"]
+                final_report_text, report_streamed, report_error = stream_completion(
+                    human_payload, headers, client, generation, timeout=60, log_tag="REPORT"
+                )
                 if not isinstance(final_report_text, str) or not final_report_text.strip():
-                    raise ValueError("Final report response was empty or invalid.")
+                    raise ValueError(f"Final report response was empty or invalid. ({report_error})")
                 log(f"[DEBUG] Raw Response Content (final_data): {final_report_text}")
 
                 # СПИСОК СТОП-СЛОВ (Если ИИ выплюнул хотя бы одно, значит это утечка промпта!)
                 PROMPT_LEAK_TRIGGERS = ["REPORT_HUMANIZATION_SYSTEM"]
 
-                # Проверяем, не слил ли ИИ наши секретные системные теги и инструкции
-                # Отмена во время гуманизации: текст уже есть, в чат его не отдаём.
-                exchange(client, {"action": "ping"}, generation)
+                # Отмена во время гуманизации. Текст уже показан стримом, поэтому abort здесь
+                # не фатален: финальный markdown-пузырь всё равно должен заменить снапшот.
+                if report_streamed and final_report_text.strip():
+                    _, ui_event = client.send_receive({"action": "ping"})
+                    if _is_abort_event(ui_event, generation):
+                        log("[STREAM] abort ignored after text")
+                else:
+                    exchange(client, {"action": "ping"}, generation)
 
                 if any(trigger in final_report_text for trigger in PROMPT_LEAK_TRIGGERS):
                     log(">>> [SECURITY ALERT] System prompt leak detected! Overriding AI output.")    

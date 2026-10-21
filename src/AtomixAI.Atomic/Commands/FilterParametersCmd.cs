@@ -2,6 +2,7 @@
 using Autodesk.Revit.ApplicationServices;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using System.Data.SqlTypes;
 using System.Reflection.Metadata;
 using System.Windows.Controls;
 using static AtomixAI.Atomic.BimKeys;
@@ -153,9 +154,11 @@ namespace AtomixAI.Atomic.Commands
                             _ => new FilterNumericEquals(),
                         };
 
-                        double valDouble = param.Item1.ParseDouble(doc, aiValueStr);
-                        ruleBase = new FilterDoubleRule(provider, doubleEvaluator, valDouble, 0.001);
-                        rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
+                        if (param.Item1.TryParseValue(doc, aiValueStr, out double valDouble))
+                        {
+                            ruleBase = new FilterDoubleRule(provider, doubleEvaluator, valDouble, 0.001);
+                            rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
+                        }
                         break;
 
                     case StorageType.Integer:
@@ -169,9 +172,13 @@ namespace AtomixAI.Atomic.Commands
                             "!=" => new FilterNumericEquals(),
                             _ => new FilterNumericEquals(),
                         };
-                        int valInt = Convert.ToInt32(param.Item1.ParseDouble(doc, aiValueStr)); ; // Например "1" для Boolean True
-                        ruleBase = new FilterIntegerRule(provider, intEvaluator, valInt);
-                        rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
+                        if(param.Item1.TryParseValue(doc, aiValueStr, out int valInt))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] valInt  {valInt}.");
+
+                            ruleBase = new FilterIntegerRule(provider, intEvaluator, valInt);
+                            rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
+                        }
                         break;
 
                     case StorageType.ElementId:
@@ -185,11 +192,11 @@ namespace AtomixAI.Atomic.Commands
                         break;
                 }
 
-                if (param.Item1.StorageType != StorageType.String)
+                if (param.Item1.StorageType != StorageType.String && rule != null)
                 {
                     resultIds = collector.WherePasses(new ElementParameterFilter(rule)).ToElementIds();
                 }
-                else
+                else if(param.Item1.StorageType == StorageType.String)
                 {
                     System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] collector count {collector.GetElementCount()}.");
 

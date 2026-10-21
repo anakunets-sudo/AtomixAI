@@ -276,6 +276,17 @@ body {
     font-style: italic;
 }
 
+/* Стрим финального ответа: тот же пузырь, но текст обычный, без shimmer-анимации. */
+.msg.ai.streaming-state {
+    display: block;
+}
+
+.streaming-label {
+    font-style: normal;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .thinking-label {
     flex: 1;
     min-width: 0;

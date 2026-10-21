@@ -495,11 +495,33 @@ function handleAIResponse(data) {
         return;
     }
 
+    // Стрим ответа: снапшоты накопленного текста перезаписывают пузырь «думаю».
+    if (data.phase === 'stream' && thinkingMsgId) {
+        // Устаревший/отменённый ход уже отфильтрован выше (isStaleOrCancelledReply).
+        const msgEl = document.getElementById(thinkingMsgId);
+        if (!msgEl) return;
+        if (!data.content) return;
+        msgEl.classList.add('streaming-state');
+        let label = msgEl.querySelector('.streaming-label');
+        if (!label) {
+            msgEl.replaceChildren();               // убрать shimmer-«thinking»
+            label = document.createElement('span');
+            label.className = 'streaming-label';
+            msgEl.appendChild(label);
+        }
+        // Cancel после начала ответа не нужен: ответ уже не остановить.
+        const cancel = msgEl.querySelector('.cancel-btn-link');
+        if (cancel) cancel.remove();
+        label.textContent = data.content;           // без markdown: перерисовка на каждый снапшот
+        scrollChatToBottom();
+        return;
+    }
+
     setBusy(false);
     if (thinkingMsgId && data.role === 'ai') {
         const msgEl = document.getElementById(thinkingMsgId);
         if (msgEl) {
-            msgEl.classList.remove('thinking-state');
+            msgEl.classList.remove('thinking-state', 'streaming-state');
             renderMessageContent(msgEl, data.content);
             initAliasButtons(msgEl);
             if (data.final_report_created === true) addRating(msgEl);

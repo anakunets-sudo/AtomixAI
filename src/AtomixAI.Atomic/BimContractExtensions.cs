@@ -12,27 +12,45 @@ namespace AtomixAI.Atomic
 {
     public static class BimContractExtensions
     {
-        public static double ParseDouble(this Parameter parameter, Document doc, string value, double defaultMm = 0.0)
+        public static bool TryParseValue(this Parameter parameter, Document doc, string value, out double result)
         {
-            if (string.IsNullOrWhiteSpace(value)) return BimUnitConverter.ConvertMmToInternal(defaultMm);
+            result = 0.0;
+            if (parameter?.Definition == null || string.IsNullOrWhiteSpace(value)) return false;
 
             try
             {
-#if REVIT2021_OR_GREATER
-                if (UnitFormatUtils.TryParse(doc.GetUnits(), parameter.Definition.GetDataType(), value, out double valueFeet))
-                {
-                    return valueFeet;
-                }
-#else
-                if (UnitFormatUtils.TryParse(new Units(UnitSystem.Metric), parameter.Definition.UnitType, value, out double valueFeet))
-                {
-                    return valueFeet;
-                }
-#endif
-            }
-            catch { /* Ловим мусор от ИИ */ }
+                ForgeTypeId dataType = parameter.Definition.GetDataType();
 
-            return BimUnitConverter.ConvertMmToInternal(defaultMm);
+                if (dataType != null && !string.IsNullOrEmpty(dataType.TypeId)
+                    && UnitUtils.IsMeasurableSpec(dataType))
+                {
+                    return UnitFormatUtils.TryParse(doc.GetUnits(), dataType, value, out result);
+                }
+
+                return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+            }
+            catch (Exception ex) when (
+                ex is Autodesk.Revit.Exceptions.ArgumentException ||
+                ex is InvalidOperationException ||
+                ex is FormatException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Parse] '{value}' for '{parameter.Definition.Name}': {ex.Message}");
+                result = 0.0;
+                return false;
+            }
+        }
+
+        public static bool TryParseValue(this Parameter parameter, Document doc, string value, out int result)
+        {
+            result = 0;
+
+            if(parameter.TryParseValue(doc, value, out double doubleResult))
+            {
+                result = Convert.ToInt32(doubleResult);
+                return true;
+            }
+
+            return false;
         }
 
         public static double GetLength(this DynamicBimContract contract, string propertyName, double defaultMm = 0.0)
