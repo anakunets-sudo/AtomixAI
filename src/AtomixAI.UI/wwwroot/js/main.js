@@ -3,6 +3,7 @@ const chatContainer = document.getElementById('chat');
 const inputField = document.getElementById('userInput');
 const themeToggle = document.getElementById('themeToggle');
 const micBtn = document.getElementById('micBtn');
+const pasteClipboardBtn = document.getElementById('pasteClipboardBtn');
 let isMicActive = false;
 let statusMsgId = null;
 let thinkingMsgId = null;
@@ -154,6 +155,22 @@ inputField.addEventListener('input', function () {
 });
 
 resizeInputField();
+
+pasteClipboardBtn.addEventListener('mousedown', event => event.preventDefault());
+pasteClipboardBtn.addEventListener('click', () => sendAction('paste_clipboard'));
+
+function updateClipboardPasteButton(available) {
+    pasteClipboardBtn.hidden = !available;
+}
+
+function insertClipboardText(text) {
+    if (typeof text !== 'string' || text.length === 0) {
+        updateClipboardPasteButton(false);
+        return;
+    }
+    insertClipboardContent(inputField, '', text);
+    updateClipboardPasteButton(true);
+}
 
 function openMenu() {
     const menu = window.Atomix.MenuController;

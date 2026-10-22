@@ -1,5 +1,6 @@
 // app.js
 const { EditorController, MenuController, RevitBridge } = window.Atomix;
+window.Atomix.ChipsController.initAliasActionMenu();
 // Слушаем ввод
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,6 +27,12 @@ window.Atomix.RevitBridge.onMessage((data) => {
     // 2. Обработка изменения темы со стороны Revit
     else if (data.action === 'theme_changed') {
         applyTheme(data.theme);
+    }
+    else if (data.action === 'clipboard_availability_changed') {
+        updateClipboardPasteButton(Boolean(data.available));
+    }
+    else if (data.action === 'clipboard_text') {
+        insertClipboardText(data.text);
     }
     // 3. Инъекция распознанного голоса в текстовое поле
     else if (data.type === 'voice_input') {

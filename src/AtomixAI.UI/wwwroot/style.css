@@ -74,6 +74,43 @@ body {
     transition: opacity 0.1s;
 }
 
+.alias-action-menu {
+    position: fixed;
+    z-index: 10000;
+    box-sizing: border-box;
+    min-width: min(88px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    font: 12px "Segoe UI", Arial, sans-serif;
+}
+
+.alias-action-menu[hidden] {
+    display: none;
+}
+
+.alias-action-item {
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.alias-action-item:hover,
+.alias-action-item:focus-visible {
+    background: var(--border);
+    outline: none;
+}
+
 
 
 /* --- ШАПКА --- */
@@ -391,6 +428,7 @@ textarea,
     max-height: 80px;
     line-height: 1.5;
     text-overflow: ellipsis;
+    white-space: pre-wrap;
 }
 
     #userInput:empty::before {
@@ -698,6 +736,24 @@ opacity: .8;
     font-weight: 600;
     font-size: 18px;
     padding: 0 0 2px 0;
+}
+
+.paste-btn {
+    left: 48px;
+}
+
+.paste-btn[hidden] {
+    display: none;
+}
+
+.paste-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.2;
 }
 
 .menu-btn svg {

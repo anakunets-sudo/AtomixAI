@@ -21,10 +21,12 @@
 
   "input.placeholder": "Discuter avec Livvy, # pour le menu",
   "input.menu": "Ouvrir le menu",
+  "input.paste": "Coller le texte",
   "input.voice": "Saisie vocale",
   "input.send": "Envoyer [Enter]",
 
   "chip.edit": "Modifier",
+  "alias.select": "Sélectionner",
 
   "footer.settings": "Afficher les paramètres d’environnement",
   "footer.aiCore": "Moteur IA :",

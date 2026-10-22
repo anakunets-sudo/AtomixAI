@@ -21,10 +21,12 @@
 
   "input.placeholder": "Chat with Livvy, # for menu",
   "input.menu": "Open menu",
+  "input.paste": "Paste text",
   "input.voice": "Voice input",
   "input.send": "Send [Enter]",
 
   "chip.edit": "Edit",
+  "alias.select": "Select",
 
   "footer.settings": "Expand environment settings",
   "footer.aiCore": "AI core:",

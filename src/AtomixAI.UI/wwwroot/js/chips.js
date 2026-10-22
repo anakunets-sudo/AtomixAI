@@ -1,6 +1,118 @@
 // chips.js
 window.Atomix = window.Atomix || {};
 window.Atomix.ChipsController = {
+    _aliasActionMenu: null,
+    _activeAlias: null,
+
+    _selectActionLabel() {
+        return window.Atomix.t('alias.select', 'Select');
+    },
+
+    initAliasActionMenu() {
+        const input = window.Atomix.EditorController.el;
+        if (!input || this._aliasActionMenu) return;
+
+        const menu = document.createElement('div');
+        menu.className = 'alias-action-menu';
+        menu.setAttribute('role', 'menu');
+        menu.hidden = true;
+
+        const selectAction = document.createElement('button');
+        selectAction.type = 'button';
+        selectAction.className = 'alias-action-item';
+        selectAction.setAttribute('role', 'menuitem');
+        selectAction.textContent = this._selectActionLabel();
+        selectAction.addEventListener('mousedown', event => event.preventDefault());
+        selectAction.addEventListener('click', () => {
+            this.insertSelectTextAfterAlias(this._activeAlias);
+            this._hideAliasActionMenu();
+        });
+
+        menu.appendChild(selectAction);
+        document.body.appendChild(menu);
+        this._aliasActionMenu = menu;
+
+        input.addEventListener('mousedown', event => {
+            if (event.button !== 0) return;
+            const target = event.target;
+            const alias = target && target.closest ? target.closest('.alias-btn') : null;
+            if (!alias || !input.contains(alias)) {
+                this._hideAliasActionMenu();
+                return;
+            }
+
+            event.preventDefault();
+            this._activeAlias = alias;
+            this._showAliasActionMenu(alias);
+        });
+
+        document.addEventListener('mousedown', event => {
+            if (!menu.contains(event.target) && !this._activeAlias?.contains(event.target)) {
+                this._hideAliasActionMenu();
+            }
+        });
+        document.addEventListener('keydown', event => {
+            if (!menu.hidden && event.key === 'Escape') {
+                this._hideAliasActionMenu();
+            }
+        });
+    },
+
+    _showAliasActionMenu(alias) {
+        const menu = this._aliasActionMenu;
+        if (!menu) return;
+
+        menu.hidden = false;
+        const rect = alias.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuRect.width - 8));
+        const top = Math.max(8, rect.top - menuRect.height - 6);
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+    },
+
+    _hideAliasActionMenu() {
+        if (this._aliasActionMenu) this._aliasActionMenu.hidden = true;
+        this._activeAlias = null;
+    },
+
+    insertSelectTextAfterAlias(alias) {
+        const input = window.Atomix.EditorController.el;
+        if (!input || !alias || !input.contains(alias)) return;
+
+        input.focus();
+        const next = alias.nextSibling;
+        const range = document.createRange();
+        const command = this._selectActionLabel();
+        let commandOffset;
+        let insertedText;
+
+        if (next && next.nodeType === Node.TEXT_NODE) {
+            const remaining = next.textContent;
+            const whitespace = /^\s*/.exec(remaining)[0].length;
+            const textAfterWhitespace = remaining.slice(whitespace);
+            range.setStart(next, whitespace);
+            range.collapse(true);
+            const prefix = whitespace ? '' : '\u00A0';
+            insertedText = document.createTextNode(`${prefix}${command}${/^\s/.test(textAfterWhitespace) ? '' : '\u00A0'}`);
+            commandOffset = prefix.length + command.length;
+        } else {
+            range.setStartAfter(alias);
+            range.collapse(true);
+            insertedText = document.createTextNode(`\u00A0${command}\u00A0`);
+            commandOffset = command.length + 1;
+        }
+
+        range.insertNode(insertedText);
+        const caret = document.createRange();
+        caret.setStart(insertedText, commandOffset);
+        caret.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(caret);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+
     insertAlias(alias) {
         const input = window.Atomix.EditorController.el;
         if (!input || !alias) return;

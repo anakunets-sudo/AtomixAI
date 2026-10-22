@@ -72,9 +72,18 @@ USER_CFG = os.path.join(
     os.environ.get("APPDATA", os.path.expanduser("~")), "AtomixAI", "providers.json"
 )
 
-PROVIDER = { "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4"], "allow_fallbacks": True, "sort": "throughput" }
+PROVIDER = { 
+    "only": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"], 
+    "order": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"],
+    "allow_fallbacks": False,
+    "require_parameters": True 
+    }
 
-PROVIDER_FLEX = { "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4"], "allow_fallbacks": True, "sort": "throughput" }
+PROVIDER_FLEX = {
+    "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4", "cloudflare"],
+    "allow_fallbacks": False, 
+    "sort": "throughput" 
+    }
 
 """
 PROVIDER = { "only": ["inference-net/fp8", "relace"], "allow_fallbacks": True }
@@ -175,6 +184,11 @@ bim_sequence_tool = {
         "parameters": {
             "type": "object",
             "properties": {
+                "intent": {
+                    "type": "string",
+                    "enum": ["refinement", "new_task", "off_topic", "abort_task"],
+                    "description": "Classify ONLY the latest user turn relative to ACTIVE_CLARIFICATION_LOCK. A different BIM request is new_task, never off_topic. Explicit cancellation is abort_task."
+                },
                 "thought": {
                     "type": "string",
                     "description": 
@@ -193,7 +207,8 @@ bim_sequence_tool = {
                     "type": "array",
                     "description": (
                         "Write this BEFORE 'active_context_tag'. Sequential BIM commands for Revit. "
-                        "Fill every known Params value from the FULL <USER_REQUEST_PAYLOAD> (ORIGINAL + all REFINEMENT messages). "
+                        "For refinement, fill known Params from the current task's FULL <USER_REQUEST_PAYLOAD>. "
+                        "For new_task, use ONLY <LATEST_USER_TURN> text and its chips; discard abandoned task facts. "
                         "If a mandatory value is still unknown after reading the payload, leave sequence EMPTY [] and ask via active_context_tag. "
                         "NEVER put a filled Params value into sequence and then claim that same parameter is missing."
                     ),
@@ -250,7 +265,7 @@ bim_sequence_tool = {
                     )
                 }
             },
-            "required": ["thought", "sequence", "active_context_tag", "user_facing_message"] 
+            "required": ["intent", "thought", "sequence", "active_context_tag", "user_facing_message"]
         }
     }
 }
@@ -375,7 +390,7 @@ chat_history = load_history()
 detected_lang = None  # Будет определен при первом запросе
 
 # --- ШАГ 1. РЕГИСТРАЦИЯ СТЕЙТ-МЕНЕДЖЕРА И ЛИМИТА ФЛУДА (State-Tagged Prompt Hydration) ---
-MAX_FLOOD_ATTEMPTS = 2  # 1 — раз дает пофлудить или неправильную попытку, на 2-й раз динамический сброс
+MAX_FLOOD_ATTEMPTS = 2  # Отмена при flood_count > MAX_FLOOD_ATTEMPTS.
 
 # Троттлинг снапшотов стрима в UI (каждый снапшот — синхронный pipe round-trip).
 STREAM_FLUSH_MS = 100
@@ -403,6 +418,12 @@ class ContextStateManager:
         #self.active_param_hint = None
         self.flood_count = 0 
         self.user_steps = []            # Полная очистка истории шагов при сбросе/успехе
+
+    def replace_task(self, turn_context, param_name=None):
+        """Заменяет незавершенную задачу текущим ходом без возможности возобновления."""
+        self.clear()
+        self.user_steps = [turn_context]
+        self.set_context(param_name)
 
 # Инициализация глобального стейта памяти сессии
 session_state = ContextStateManager()
@@ -488,6 +509,63 @@ def build_bim_sequence_tool(tool_catalog):
         item_schema.clear()
         item_schema["anyOf"] = variants
     return tool
+
+def _matches_command_schema(value, schema):
+    """Validate the JSON schema subset emitted by the Revit command registry."""
+    if not isinstance(schema, dict):
+        return False
+    if "enum" in schema and value not in schema["enum"]:
+        return False
+    kind = schema.get("type")
+    if kind == "object":
+        if not isinstance(value, dict):
+            return False
+        required = schema.get("required", [])
+        if any(key not in value for key in required):
+            return False
+        properties = schema.get("properties", {})
+        extra = schema.get("additionalProperties", True)
+        for key, item in value.items():
+            if key in properties:
+                if not _matches_command_schema(item, properties[key]):
+                    return False
+            elif extra is False or isinstance(extra, dict) and not _matches_command_schema(item, extra):
+                return False
+    elif kind == "array":
+        if not isinstance(value, list):
+            return False
+        return all(_matches_command_schema(item, schema.get("items", {})) for item in value)
+    elif kind == "string":
+        return isinstance(value, str)
+    elif kind == "boolean":
+        return isinstance(value, bool)
+    elif kind == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    elif kind == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    elif kind is not None:
+        return False
+    return True
+
+def _is_valid_sequence(sequence, tool_catalog):
+    """Fail closed on empty/malformed sequences, unknown commands or invalid arguments."""
+    if not isinstance(sequence, list) or not sequence or not isinstance(tool_catalog, dict):
+        return False
+    commands = {}
+    for group in tool_catalog.get("bim_tools", {}).values():
+        if isinstance(group, dict):
+            for command in group.get("tools", []):
+                if isinstance(command, dict) and isinstance(command.get("name"), str):
+                    commands[command["name"]] = command.get("parameters")
+    for step in sequence:
+        if not isinstance(step, dict) or set(step) != {"name", "arguments"}:
+            return False
+        name = step["name"]
+        if not isinstance(name, str) or name not in commands:
+            return False
+        if not _matches_command_schema(step["arguments"], commands[name]):
+            return False
+    return True
 
 def _push_stream_snapshot(client, text, generation=0):
     """Отправляет в UI накопленный текст стрима. Abort после начала ответа не фатален."""
@@ -792,6 +870,8 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
             f"</LOCALIZATION_DIRECTIVES>\n"
             \
             f"<TARGET_LANGUAGE>{detected_lang}</TARGET_LANGUAGE>\n"
+            f"<ACTIVE_CLARIFICATION_LOCK>{session_state.active_param or ''}</ACTIVE_CLARIFICATION_LOCK>\n"
+            f"<LATEST_USER_TURN>{json.dumps(turn_context, ensure_ascii=False)}</LATEST_USER_TURN>\n"
             f"<USER_REQUEST_PAYLOAD>\n"
             f"{user_payload_string}\n"  # <-- ТЕПЕРЬ ЗДЕСЬ СТРУКТУРИРОВАННАЯ ХРОНОЛОГИЯ ШАГОВ
             f"</USER_REQUEST_PAYLOAD>\n"
@@ -872,14 +952,44 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # ШАГ 2. СЦЕНАРИЙ Б: ИИ СГЕНЕРИРОВАЛ ВЫЗОВ ФУНКЦИИ
         # -----------------------------------------------------------------
         tool_call = message_node["tool_calls"][0]["function"]
-        data = json.loads(tool_call["arguments"]) if isinstance(tool_call["arguments"], str) else tool_call["arguments"]      
+        try:
+            data = json.loads(tool_call["arguments"]) if isinstance(tool_call["arguments"], str) else tool_call["arguments"]
+        except (ValueError, TypeError, KeyError):
+            return "Please clarify whether you are refining the current task, starting a new BIM task, or cancelling it.", False
+        if (tool_call.get("name") != "execute_bim_sequence" or not isinstance(data, dict)
+                or data.get("intent") not in ("refinement", "new_task", "off_topic", "abort_task")):
+            return "Please clarify whether you are refining the current task, starting a new BIM task, or cancelling it.", False
 
         log(f"[DEBUG] СЦЕНАРИЙ Б") 
 
         ai_active_context_tool = data.get("active_context_tag", "")
              
-        ai_user_msg = data.get("user_facing_message", "").strip()
+        ai_user_msg = data.get("user_facing_message", "")
+        ai_user_msg = ai_user_msg.strip() if isinstance(ai_user_msg, str) else ""
         ai_sequence = data.get("sequence", [])
+        intent = data["intent"]
+
+        if intent == "abort_task":
+            session_state.clear()
+            return ai_user_msg or "The current task has been cancelled.", False
+
+        if intent == "off_topic":
+            if session_state.active_param:
+                session_state.flood_count += 1
+                if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
+                    session_state.clear()
+                    return execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context_string), False
+            return ai_user_msg or "Please return to the BIM task or start a new BIM request.", False
+
+        if intent == "new_task":
+            session_state.replace_task(turn_context)
+            # The classification payload kept the old history. Reports and future turns must not.
+            chip_context_string = json.dumps(
+                [{"turn": 0, "message": user_text, "chips": normalized_chips}] if normalized_chips else [],
+                ensure_ascii=False, indent=2)
+
+        if not isinstance(ai_active_context_tool, str):
+            return "Please clarify the missing parameter for this task.", False
 
         log(f">>> [LOGIC] Machine parameter from AI: '{ai_active_context_tool}'")
         log(f">>> [LOGIC] Sequence: {ai_sequence}")
@@ -887,54 +997,28 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
 
         # Модель иногда ставит active_context_tag, хотя параметр уже есть в sequence
         # (как filter_parameters:ParameterValue при ParameterValue="Гараж"). Тогда не блокируем исполнение.
-        if ai_active_context_tool not in [None, ""] and ai_sequence and _sequence_has_context_param(ai_sequence, ai_active_context_tool):
+        if ai_active_context_tool not in [None, ""] and isinstance(ai_sequence, list) and _sequence_has_context_param(ai_sequence, ai_active_context_tool):
             log(f"[*] Ignoring stale active_context_tag '{ai_active_context_tool}' — value already present in sequence.")
             ai_active_context_tool = ""
-            session_state.clear()
 
         # ВАРИАНТ 1: ИИ подтверждает, что параметров не хватает (удерживаем или создаем замок)
         if ai_active_context_tool not in [None,""]:
             log(f"[*] AI flagged incomplete query. Registering/Updating focus lock: {ai_active_context_tool}")            
             
-            # Проверяем: ИИ просит ТОТ ЖЕ самый параметр или уже СЛЕДУЮЩИЙ?
-            if session_state.active_param == ai_active_context_tool:
-                # Пользователь не дал нужный параметр, флудит
-                session_state.flood_count += 1
-            else:
-                # Пользователь дал параметр, ИИ перешел к следующему (или это первый параметр)
-                session_state.set_context(param_name=ai_active_context_tool)
-                session_state.flood_count = 1
-                
-            log(f"[FLOOD] сценарий Б AI ждет уточнения: {session_state.flood_count}/{MAX_FLOOD_ATTEMPTS}")
-            
-            if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
-                log(f"[-] Flood limit blown in Scenario B. Dropping context dynamically.")
-                session_state.clear()
-                return execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context_string), False
+            session_state.set_context(param_name=ai_active_context_tool)
+            return ai_user_msg or "Please provide the missing parameter for this task.", False
 
-            if ai_user_msg:
-                return ai_user_msg, False
-
-        # ВАРИАНТ 2: ИИ не вернул замок, но и команд в sequence нет — скрытый сбой/флуд модели
+        # Пустой sequence не исполняется и сам по себе не считается флудом.
         if not ai_sequence:
-            # Если замок висел, расцениваем это как неудачную попытку уточнения (флуд)
-            if session_state.active_param:
-                session_state.flood_count += 1
-                log(f"[FLOOD] сценарий Б неудачное уточнение: {session_state.flood_count}/{MAX_FLOOD_ATTEMPTS}")
-                if session_state.flood_count > MAX_FLOOD_ATTEMPTS:
-                    log("[-] Empty sequence flood limit blown in Scenario B. Clearing state.")
-                    session_state.clear()
-                    return execute_eviction_protocol(user_text, client, generation, detected_lang, headers, chip_context_string), False
-            
             if ai_user_msg:
                 return ai_user_msg, False
             return "The task could not be completed. Please refine your request.", False
 
-        # ВАРИАНТ 3: ТАКТИЧЕСКИЙ СБРОС (ИИ прислал пустой тег контекста и живой sequence)
-        # Задача успешно дозаполнена или юзер сменил тему на другую валидную команду.
-        if session_state.active_param in (None, "", {}):
-            log(f"[+] Task Switching / Resolution detected! Erasing previous lock.")
-            # Счетчик флуда сбросится ниже, перед выполнением батча
+        if not _is_valid_sequence(ai_sequence, res_tools):
+            log("[!] Rejected incomplete or invalid sequence against the command catalog.")
+            return "Please clarify your request; the command parameters are incomplete or invalid.", False
+
+        session_state.clear()
 
         # -----------------------------------------------------------------
         # --- 3. ВЫПОЛНЕНИЕ В REVIT (Batch Mode) ---

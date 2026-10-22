@@ -21,10 +21,12 @@
 
   "input.placeholder": "Mit Livvy chatten, # für Menü",
   "input.menu": "Menü öffnen",
+  "input.paste": "Text einfügen",
   "input.voice": "Spracheingabe",
   "input.send": "Senden [Enter]",
 
   "chip.edit": "Bearbeiten",
+  "alias.select": "Auswählen",
 
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",

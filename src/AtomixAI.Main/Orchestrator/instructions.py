@@ -16,7 +16,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"User wants to create a wall. The 'create_wall' command requires a mandatory parameter 'Length', which is missing. I must ask the user for the missing parameter directly.\",\"sequence\": [],\"active_context_tag\": \"create_wall:Length\",\"user_facing_message\": \"Please specify wall length, for example, 6000 mm or 10 feet?\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"User wants to create a wall. The 'create_wall' command requires a mandatory parameter 'Length', which is missing. I must ask the user for the missing parameter directly.\",\"sequence\": [],\"active_context_tag\": \"create_wall:Length\",\"user_facing_message\": \"Please specify wall length, for example, 6000 mm or 10 feet?\"}"
             }
         }]
     },
@@ -40,7 +40,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user explicitly wants the width value from chip_7 to be the new wall length. The chip provides 900 mm, so map that concrete value into create_wall.Params.Length. Do not pass the chip reference or unrelated source metadata to the command.\",\"sequence\": [{\"name\": \"create_wall\",\"arguments\": {\"Params\": {\"Length\": \"900mm\"},\"Out\": \"#wall_created_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I will create a wall with a length of 900 mm, using the selected width value.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user explicitly wants the width value from chip_7 to be the new wall length. The chip provides 900 mm, so map that concrete value into create_wall.Params.Length. Do not pass the chip reference or unrelated source metadata to the command.\",\"sequence\": [{\"name\": \"create_wall\",\"arguments\": {\"Params\": {\"Length\": \"900mm\"},\"Out\": \"#wall_created_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I will create a wall with a length of 900 mm, using the selected width value.\"}"
             }
         }]
     },
@@ -64,7 +64,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The chip supplies the Mark parameter. I fill EVERY Params field the chip provides: parameter_Name → ParameterName, parameter_Id → ParameterId, is_Type → IsType, parameter_Value → ParameterValue. parameter_Guid is empty, so ParameterGuid is left empty. The user asks for operator begins, nothing is missing.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"ParameterId\": \"-1010101\", \"IsType\": \"false\", \"Operator\": \"begins\", \"ParameterValue\": \"G\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll find walls whose Mark begins with G.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The chip supplies the Mark parameter. I fill EVERY Params field the chip provides: parameter_Name → ParameterName, parameter_Id → ParameterId, is_Type → IsType, parameter_Value → ParameterValue. parameter_Guid is empty, so ParameterGuid is left empty. The user asks for operator begins, nothing is missing.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"ParameterId\": \"-1010101\", \"IsType\": \"false\", \"Operator\": \"begins\", \"ParameterValue\": \"G\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll find walls whose Mark begins with G.\"}"
             }
         }]
     },
@@ -88,7 +88,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find all walls. I will initialize the search on the active view first, then pass the resulting tag to the fast filtering tool to restrict elements strictly to walls.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_1\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_1\",\"Params\": {\"Categories\": [\"OST_Walls\"]},\"Out\": \"#search_elements_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"Ich suche jetzt auf der aktiven Ansicht alle Wände.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to find all walls. I will initialize the search on the active view first, then pass the resulting tag to the fast filtering tool to restrict elements strictly to walls.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_1\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_1\",\"Params\": {\"Categories\": [\"OST_Walls\"]},\"Out\": \"#search_elements_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"Ich suche jetzt auf der aktiven Ansicht alle Wände.\"}"
             }
         }]
     },  
@@ -112,7 +112,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to count the number of doors. I will run a search on the active view and then filter the elements by the OST_Doors category. I will report the number of elements and the tag '#' associated with them.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_2\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_2\",\"Params\": {\"Categories\": [\"OST_Doors\"]},\"Out\": \"#found_doors_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll search this view for doors and count them.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to count the number of doors. I will run a search on the active view and then filter the elements by the OST_Doors category. I will report the number of elements and the tag '#' associated with them.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_2\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_2\",\"Params\": {\"Categories\": [\"OST_Doors\"]},\"Out\": \"#found_doors_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll search this view for doors and count them.\"}"
             }
         }]
     },
@@ -136,7 +136,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find roofs on a specific level. I must first initialize the project scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the spatial level filter for 'Level 2'.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"Project\"},\"Out\": \"#init_elements_roofs\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_roofs\",\"Params\": {\"Categories\": [\"OST_Roofs\"]},\"Out\": \"#only_roofs_1\"}},{\"name\": \"filter_spatial\",\"arguments\": {\"In\": \"#only_roofs_1\",\"Params\": {\"Levels\": [\"Level 2\"]},\"Out\": \"#search_elements_2\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll search the project for roofs on Level 2.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to find roofs on a specific level. I must first initialize the project scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the spatial level filter for 'Level 2'.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"Project\"},\"Out\": \"#init_elements_roofs\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_roofs\",\"Params\": {\"Categories\": [\"OST_Roofs\"]},\"Out\": \"#only_roofs_1\"}},{\"name\": \"filter_spatial\",\"arguments\": {\"In\": \"#only_roofs_1\",\"Params\": {\"Levels\": [\"Level 2\"]},\"Out\": \"#search_elements_2\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll search the project for roofs on Level 2.\"}"
             }
         }]
     },
@@ -160,7 +160,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find roofs exclude #roof_created_1. I must first initialize the ActiveView scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the select_except command to exclude the specified roof.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_roofs\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_roofs\",\"Params\": {\"Categories\": [\"OST_Roofs\"]},\"Out\": \"#only_roofs_1\"}},{\"name\": \"select_except\",\"arguments\": {\"In\": \"#only_roofs_1\",\"Params\": {\"ExceptTag\": \"#roof_created_1\"},\"Out\": \"#search_roofs_excluded_created_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll find roofs on this view and exclude #roof_created_1.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to find roofs exclude #roof_created_1. I must first initialize the ActiveView scope, then filter elements strictly by the OST_Roofs category to isolate instances, and finally apply the select_except command to exclude the specified roof.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_elements_roofs\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_elements_roofs\",\"Params\": {\"Categories\": [\"OST_Roofs\"]},\"Out\": \"#only_roofs_1\"}},{\"name\": \"select_except\",\"arguments\": {\"In\": \"#only_roofs_1\",\"Params\": {\"ExceptTag\": \"#roof_created_1\"},\"Out\": \"#search_roofs_excluded_created_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll find roofs on this view and exclude #roof_created_1.\"}"
             }
         }]
     },
@@ -184,7 +184,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to select elements on the current view but did not specify the target category or entity. No total-scope keywords like 'everything' were used. According to the <TARGET_ENTITY_MANDATE>, I must halt execution, lock context, and ask for target categories.\",\"sequence\": [],\"active_context_tag\": \"filter_elements:Categories\",\"user_facing_message\": \"I’m ready to do that! Please let me know exactly which elements to highlight in this view, for example, walls, windows, doors, or air ducts.?)\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to select elements on the current view but did not specify the target category or entity. No total-scope keywords like 'everything' were used. According to the <TARGET_ENTITY_MANDATE>, I must halt execution, lock context, and ask for target categories.\",\"sequence\": [],\"active_context_tag\": \"filter_elements:Categories\",\"user_facing_message\": \"I’m ready to do that! Please let me know exactly which elements to highlight in this view, for example, walls, windows, doors, or air ducts.?)\"}"
             }
         }]
     },
@@ -208,7 +208,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to find walls based on a dimensional parameter. I will initialize the search on the active view, filter strictly by the OST_Walls category to isolate instances, and then apply a parameter filter for the 'Width' property using the '>' operator with a value of '200mm'.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_walls_1\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_walls_1\",\"Params\": {\"Categories\": [\"OST_Walls\"]},\"Out\": \"#only_walls_1\"}},{\"name\": \"filter_parameters\",\"arguments\": {\"In\": \"#only_walls_1\",\"Params\": {\"FilterType\": \"Parameter\",\"ParameterName\": \"Width\",\"Operator\": \">\",\"ParameterValue\": \"200mm\"},\"Out\": \"#final_thick_walls_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll find walls thicker than 200 mm on this view.\"}"
+                "arguments": "{\"intent\": \"new_task\",\"thought\": \"The user wants to find walls based on a dimensional parameter. I will initialize the search on the active view, filter strictly by the OST_Walls category to isolate instances, and then apply a parameter filter for the 'Width' property using the '>' operator with a value of '200mm'.\",\"sequence\": [{\"name\": \"search_init\",\"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"},\"Out\": \"#init_walls_1\"}},{\"name\": \"filter_elements\",\"arguments\": {\"In\": \"#init_walls_1\",\"Params\": {\"Categories\": [\"OST_Walls\"]},\"Out\": \"#only_walls_1\"}},{\"name\": \"filter_parameters\",\"arguments\": {\"In\": \"#only_walls_1\",\"Params\": {\"FilterType\": \"Parameter\",\"ParameterName\": \"Width\",\"Operator\": \">\",\"ParameterValue\": \"200mm\"},\"Out\": \"#final_thick_walls_1\"}}],\"active_context_tag\": \"\",\"user_facing_message\": \"I'll find walls thicker than 200 mm on this view.\"}"
             }
         }]
     },
@@ -232,7 +232,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user is speaking politely. I need to steer the conversation toward working in Revit.\",\"sequence\": [],\"active_context_tag\": \"\",\"user_facing_message\": \"I’m doing great and am fully ready to work on your BIM model. What will we set up or build today?\"}"
+                "arguments": "{\"intent\": \"off_topic\",\"thought\": \"The latest turn is small talk, not a BIM task.\",\"sequence\": [],\"active_context_tag\": \"\",\"user_facing_message\": \"I’m doing great and am fully ready to work on your BIM model. What will we set up or build today?\"}"
             }
         }]
     },
@@ -254,7 +254,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to know about the AI ​​model. I should state that I am a large language model trained by an independent team of developers to work with Revit.\",\"sequence\": [],\"active_context_tag\": \"\",\"user_facing_message\": \"Ich bin ein umfangreiches industrielles Sprachmodell (LLM), das von einem unabhängigen Entwicklerteam trainiert wurde. Ich stehe Ihnen gerne bei Revit zur Seite.\"}"
+                "arguments": "{\"intent\": \"off_topic\",\"thought\": \"The latest turn is a question about the assistant, not a BIM task.\",\"sequence\": [],\"active_context_tag\": \"\",\"user_facing_message\": \"Ich bin ein umfangreiches industrielles Sprachmodell (LLM), das von einem unabhängigen Entwicklerteam trainiert wurde. Ich stehe Ihnen gerne bei Revit zur Seite.\"}"
             }
         }]
     },
@@ -277,7 +277,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"ORIGINAL_MESSAGE pertains to a bim tool call. REFINEMENT_MESSAGE_1 constitutes spam. I am considering only ORIGINAL_MESSAGE, for which I need to call 'search_init' and populate 'active_context_tag' with the missing 'search_init:Scope' parameter.\",\"sequence\": [],\"active_context_tag\": \"search_init:Scope\",\"user_facing_message\": \"I cannot get sidetracked by off-topic matters. Please specify the search scope (active view or project) or the element category.\"}"
+                "arguments": "{\"intent\": \"off_topic\",\"thought\": \"The active lock is search_init:Scope. The latest user turn is explicitly about dolphins and is unrelated to BIM, so it is off-topic; retain the active task and ask for its missing scope.\",\"sequence\": [],\"active_context_tag\": \"search_init:Scope\",\"user_facing_message\": \"I cannot get sidetracked by off-topic matters. Please specify the search scope (active view or project) or the element category.\"}"
             }
         }]
     },
@@ -301,7 +301,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"REFINEMENT_MESSAGE_2 explicitly stated: mark → ParameterName Mark. Operator == is specified. The parameter value 'Garage' is specified, and I use it as-is because I never translate user-provided parameter values. The sequence is complete, 'active_context_tag' is empty. Mark is used only because the user gave it that name.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"ParameterValue\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
+                "arguments": "{\"intent\": \"refinement\",\"thought\": \"The active task is to find elements; the latest turn contributes walls, a Mark parameter, equality, and value Garage. Merge these relevant refinements with the current task history.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Walls\"]}, \"Out\": \"#walls_1\"}}, {\"name\": \"filter_parameters\", \"arguments\": {\"In\": \"#walls_1\", \"Params\": {\"FilterType\": \"Parameter\", \"ParameterName\": \"Mark\", \"Operator\": \"==\", \"ParameterValue\": \"Garage\"}, \"Out\": \"#filtered_walls_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll search the active view for walls with mark Garage.\"}"
             }
         }]
     },
@@ -325,7 +325,7 @@ FEW_SHOT_EXAMPLES = [
             "type": "function",
             "function": {
                 "name": "execute_bim_sequence",
-                "arguments": "{\"thought\": \"The user wants to select walls whose value for a text parameter starts with the letter 'G'. I never translate parameter values. The user did not specify the parameter name (neither Mark nor Name). Guessing that it is Mark is forbidden. Halt execution and ask for the parameter name (ParameterName).\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter name (ParameterName) should I use?\"}"
+                "arguments": "{\"intent\": \"refinement\",\"thought\": \"The latest turn adds a relevant value constraint to the active wall search, but does not name the Revit parameter. Do not guess a parameter; keep the accumulated task and ask for ParameterName.\", \"sequence\": [], \"active_context_tag\": \"filter_parameters:ParameterName\", \"user_facing_message\": \"Which parameter name (ParameterName) should I use?\"}"
             }
         }]
     },
@@ -334,6 +334,30 @@ FEW_SHOT_EXAMPLES = [
         "tool_call_id": "call_ex_ask_param_name",
         "name": "execute_bim_sequence",
         "content": "{\"status\": \"halted_missing_parameters\"}"
+    },
+
+    # A complete latest-turn BIM task replaces an unrelated task with an active lock.
+    {
+        "role": "user",
+        "content": "- ACTIVE_CLARIFICATION_LOCK: create_wall:Length\n- ORIGINAL_MESSAGE: \"Build a wall.\"\n- LATEST_USER_TURN: \"Find all doors in the active view.\""
+    },
+    {
+        "role": "assistant",
+        "content": "I'll find all doors in the active view.",
+        "tool_calls": [{
+            "id": "call_ex_task_switch",
+            "type": "function",
+            "function": {
+                "name": "execute_bim_sequence",
+                "arguments": "{\"intent\": \"new_task\", \"thought\": \"Classify only LATEST_USER_TURN relative to the active lock. 'Find all doors in the active view' is a complete, independent BIM task, not a wall refinement. Discard the abandoned wall request and its missing Length; build this sequence only from the latest request.\", \"sequence\": [{\"name\": \"search_init\", \"arguments\": {\"Params\": {\"Scope\": \"ActiveView\"}, \"Out\": \"#init_elements_1\"}}, {\"name\": \"filter_elements\", \"arguments\": {\"In\": \"#init_elements_1\", \"Params\": {\"Categories\": [\"OST_Doors\"]}, \"Out\": \"#doors_1\"}}], \"active_context_tag\": \"\", \"user_facing_message\": \"I'll find all doors in the active view.\"}"
+            }
+        }]
+    },
+    {
+        "role": "tool",
+        "tool_call_id": "call_ex_task_switch",
+        "name": "execute_bim_sequence",
+        "content": "{\"status\": \"success\"}"
     },
 ]
 
@@ -435,14 +459,18 @@ CRITICAL MANDATE:
 
 <ACTIVE_CONTEXT_LOCK_RULES>
 CRITICAL — prevents false locks that block Revit execution:
-1. Emit fields in order: thought → sequence → active_context_tag → user_facing_message.
-2. Merge ORIGINAL_MESSAGE with every REFINEMENT_MESSAGE_* before deciding what is missing.
-3. Map ONLY when the user explicitly names it: "mark"/"Mark"/"марка" → ParameterName "Mark"; "comments"/"Comments"/"комментарий" → Comments; walls/стены → OST_Walls. Quoted text alone is ParameterValue, NOT a parameter name.
-4. PARAMETER NAME MANDATE: If the user gives a value / letter / substring / "starts with" / "contains" but does NOT name which Revit parameter to check, you MUST NOT guess (especially NOT default to Mark or Name). sequence=[] , active_context_tag="filter_parameters:ParameterName", ask which parameter.
-5. If filter_parameters already has non-empty ParameterName AND ParameterValue (and Operator) in sequence, active_context_tag MUST be "".
-6. NEVER set active_context_tag to a parameter that you just filled in the same sequence (e.g. ParameterValue="Garage" then tag filter_parameters:ParameterValue is FORBIDDEN).
-7. If anything mandatory is still unknown: sequence MUST be [] and active_context_tag names exactly one missing ToolName:ParameterName.
-8. A non-empty active_context_tag with a fully filled executable sequence is a hard error — prefer empty tag and execute.
+1. Emit fields in order: intent → thought → sequence → active_context_tag → user_facing_message.
+2. Classify ONLY the latest user turn relative to ACTIVE_CLARIFICATION_LOCK and LATEST_USER_TURN. Do not classify from earlier turns or accumulated task text.
+3. Use intent "new_task" when the latest turn is a standalone BIM request or an independent new BIM request during an active lock. Build its sequence using only that latest task text and chips attached/relevant to it; never merge the abandoned ORIGINAL_MESSAGE, its refinements, or its missing fields.
+4. Use intent "refinement" only when the latest turn is a relevant answer or change to the active task. Merge that turn with the current task history to determine what remains missing.
+5. Use intent "off_topic" for small talk or explicit unrelated distractions (including requests for a cat fact or a joke). Off-topic content is never a valid BIM task and must never be mapped into a Revit sequence. During an active lock, retain the locked task and ask for its missing information.
+6. Use intent "abort_task" only when the latest turn explicitly cancels/stops the active task.
+7. Map ONLY when the user explicitly names it: "mark"/"Mark"/"марка" → ParameterName "Mark"; "comments"/"Comments"/"комментарий" → Comments; walls/стены → OST_Walls. Quoted text alone is ParameterValue, NOT a parameter name.
+8. PARAMETER NAME MANDATE: If the user gives a value / letter / substring / "starts with" / "contains" but does NOT name which Revit parameter to check, you MUST NOT guess (especially NOT default to Mark or Name). sequence=[] , active_context_tag="filter_parameters:ParameterName", ask which parameter.
+9. If filter_parameters already has non-empty ParameterName AND ParameterValue (and Operator) in sequence, active_context_tag MUST be "".
+10. NEVER set active_context_tag to a parameter that you just filled in the same sequence (e.g. ParameterValue="Garage" then tag filter_parameters:ParameterValue is FORBIDDEN).
+11. If anything mandatory is still unknown: sequence MUST be [] and active_context_tag names exactly one missing ToolName:ParameterName.
+12. A non-empty active_context_tag with a fully filled executable sequence is a hard error — prefer empty tag and execute.
 </ACTIVE_CONTEXT_LOCK_RULES>
 
 </SEARCH_PROTOCOL>

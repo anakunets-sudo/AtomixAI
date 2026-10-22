@@ -7,8 +7,11 @@ using Microsoft.Web.WebView2.Wpf;
 using System;
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace AtomixAI.Main.UI
@@ -20,6 +23,9 @@ namespace AtomixAI.Main.UI
         private readonly Autodesk.Revit.UI.ExternalEvent _exEvent;
         private bool _isInitializing = false; // Поле в классе для защиты от дублей
         private McpHost _mcpHost;
+        private const int WmClipboardUpdate = 0x031D;
+        private HwndSource? _clipboardSource;
+        private bool _clipboardListenerRegistered;
 
         // НАШИ НОВЫЕ ПОЛЯ ДЛЯ ИЗОЛИРОВАННОГО UI
         private readonly AtomixAI.UI.Infrastructure.UiExternalEventHandler _uiHandler;
@@ -65,6 +71,7 @@ namespace AtomixAI.Main.UI
                 {
                     PushThemeToFrontend();
                     await PushLocalizationToFrontendAsync();
+                    PushClipboardAvailability();
                 };
 
                 // 5. Установка адреса
@@ -120,7 +127,102 @@ namespace AtomixAI.Main.UI
             WebView = new Microsoft.Web.WebView2.Wpf.WebView2();
             grid.Children.Add(WebView);
             this.Content = grid;
+            Loaded += OnPaneLoaded;
+            Unloaded += OnPaneUnloaded;
         }
+
+        private void OnPaneLoaded(object sender, System.Windows.RoutedEventArgs e)
+        {
+            var source = PresentationSource.FromVisual(this) as HwndSource;
+            if (source == null)
+            {
+                Debug.WriteLine("[Clipboard] Could not find the pane window handle.");
+                return;
+            }
+
+            if (ReferenceEquals(_clipboardSource, source))
+            {
+                PushClipboardAvailability();
+                return;
+            }
+
+            RemoveClipboardListener();
+            _clipboardSource = source;
+            _clipboardSource.AddHook(OnClipboardWindowMessage);
+            _clipboardListenerRegistered = AddClipboardFormatListener(_clipboardSource.Handle);
+            if (!_clipboardListenerRegistered)
+            {
+                Debug.WriteLine($"[Clipboard] AddClipboardFormatListener failed: {Marshal.GetLastWin32Error()}");
+            }
+            PushClipboardAvailability();
+        }
+
+        private void OnPaneUnloaded(object sender, System.Windows.RoutedEventArgs e)
+        {
+            RemoveClipboardListener();
+        }
+
+        private void RemoveClipboardListener()
+        {
+            if (_clipboardSource == null) return;
+
+            _clipboardSource.RemoveHook(OnClipboardWindowMessage);
+            if (_clipboardListenerRegistered && !RemoveClipboardFormatListener(_clipboardSource.Handle))
+            {
+                Debug.WriteLine($"[Clipboard] RemoveClipboardFormatListener failed: {Marshal.GetLastWin32Error()}");
+            }
+            _clipboardListenerRegistered = false;
+            _clipboardSource = null;
+        }
+
+        private IntPtr OnClipboardWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (message == WmClipboardUpdate)
+            {
+                PushClipboardAvailability();
+            }
+            return IntPtr.Zero;
+        }
+
+        private void PushClipboardAvailability()
+        {
+            string? text = TryReadClipboardText();
+            if (text == null || WebView?.CoreWebView2 == null) return;
+
+            WebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                action = "clipboard_availability_changed",
+                available = text.Length > 0
+            }));
+        }
+
+        private string? TryReadClipboardText()
+        {
+            try
+            {
+                return System.Windows.Clipboard.ContainsText()
+                    ? System.Windows.Clipboard.GetText()
+                    : string.Empty;
+            }
+            catch (ExternalException ex)
+            {
+                Debug.WriteLine($"[Clipboard] Could not read clipboard text: {ex.Message}");
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine($"[Clipboard] Could not read clipboard text: {ex.Message}");
+                return null;
+            }
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AddClipboardFormatListener(IntPtr hwnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
 
         private static bool ResolveIsDark(UIApplication uiapp)
         {
@@ -222,6 +324,15 @@ namespace AtomixAI.Main.UI
                 string action = request["action"]?.ToString();
                 switch (action)
                 {
+                    case "paste_clipboard":
+                        string clipboardText = TryReadClipboardText() ?? string.Empty;
+                        WebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(new
+                        {
+                            action = "clipboard_text",
+                            text = clipboardText
+                        }));
+                        break;
+
                     case "GET_SUB_CONTEXT":
                         string subId = request["payload"]?["id"]?.ToString();
                         if (!string.IsNullOrEmpty(subId))
@@ -402,4 +513,3 @@ namespace AtomixAI.Main.UI
         public static string Name => "BIM Wave";
     }
 }
-
