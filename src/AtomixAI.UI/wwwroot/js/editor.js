@@ -3,8 +3,25 @@ window.Atomix = window.Atomix || {};
 window.Atomix.EditorController = {
     el: document.getElementById('userInput'),
     triggerChar: '#',
+    savedRange: null,
+    _mouseDownInEditor: false,
     init() {
         if (!this.el) return;
+        this.el.addEventListener('mousedown', (e) => {
+            if (e.button === 0) this._mouseDownInEditor = true;
+        }, true);
+        document.addEventListener('mouseup', () => {
+            this._mouseDownInEditor = false;
+        }, true);
+        document.addEventListener('selectionchange', () => this.saveSelection());
+        this.el.addEventListener('blur', () => this.saveSelection());
+        this.el.addEventListener('focus', () => {
+            if (this._mouseDownInEditor) return;
+            this.restoreSelection();
+        });
+        this.el.addEventListener('input', () => {
+            if (!this._selectionIsInEditor()) this.savedRange = null;
+        });
         // Глобальный перехват клавиш для управления меню (чтобы фокус не терялся)
         document.addEventListener('keydown', (e) => {
             const menu = window.Atomix.MenuController;
@@ -34,6 +51,42 @@ window.Atomix.EditorController = {
             document.execCommand('insertText', false, text);
         });
         console.log("EditorController: Initialized");
+    },
+    _selectionIsInEditor() {
+        const selection = window.getSelection();
+        return !!(selection && selection.rangeCount > 0 &&
+            this.el.contains(selection.anchorNode) &&
+            this.el.contains(selection.focusNode));
+    },
+    saveSelection() {
+        if (!this._selectionIsInEditor()) return;
+        this.savedRange = window.getSelection().getRangeAt(0).cloneRange();
+    },
+    getCaretRange() {
+        if (document.activeElement !== this.el && this.savedRange &&
+            this.el.contains(this.savedRange.startContainer) &&
+            this.el.contains(this.savedRange.endContainer)) {
+            return this.savedRange.cloneRange();
+        }
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            if (this.el.contains(range.startContainer) && this.el.contains(range.endContainer)) {
+                this.savedRange = range.cloneRange();
+                return range;
+            }
+        }
+        return this.savedRange && this.el.contains(this.savedRange.startContainer) &&
+            this.el.contains(this.savedRange.endContainer)
+            ? this.savedRange.cloneRange()
+            : null;
+    },
+    restoreSelection() {
+        if (!this.savedRange || !this.el.contains(this.savedRange.startContainer) ||
+            !this.el.contains(this.savedRange.endContainer)) return;
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(this.savedRange.cloneRange());
     },
     handleKeyDown(e) {
         const menu = window.Atomix.MenuController;

@@ -109,6 +109,26 @@ namespace AtomixAI.Main.UI
             }
         }
 
+        private string? TryReadClipboardHtml()
+        {
+            try
+            {
+                return System.Windows.Clipboard.ContainsText(System.Windows.TextDataFormat.Html)
+                    ? System.Windows.Clipboard.GetText(System.Windows.TextDataFormat.Html)
+                    : string.Empty;
+            }
+            catch (ExternalException ex)
+            {
+                Debug.WriteLine($"[Clipboard] Could not read clipboard HTML: {ex.Message}");
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.WriteLine($"[Clipboard] Could not read clipboard HTML: {ex.Message}");
+                return null;
+            }
+        }
+
         private bool _isDarkTheme = false;
         private bool _hostThemeKnown = false;
         private bool _nativeSchemeApplied = false;
@@ -192,7 +212,7 @@ namespace AtomixAI.Main.UI
             WebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(new
             {
                 action = "clipboard_availability_changed",
-                available = text.Length > 0
+                available = !string.IsNullOrWhiteSpace(text)
             }));
         }
 
@@ -326,10 +346,12 @@ namespace AtomixAI.Main.UI
                 {
                     case "paste_clipboard":
                         string clipboardText = TryReadClipboardText() ?? string.Empty;
+                        string clipboardHtml = TryReadClipboardHtml() ?? string.Empty;
                         WebView.CoreWebView2.PostWebMessageAsJson(Newtonsoft.Json.JsonConvert.SerializeObject(new
                         {
                             action = "clipboard_text",
-                            text = clipboardText
+                            text = clipboardText,
+                            html = clipboardHtml
                         }));
                         break;
 

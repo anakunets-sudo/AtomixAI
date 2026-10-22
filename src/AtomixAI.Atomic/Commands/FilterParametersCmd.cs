@@ -125,23 +125,23 @@ namespace AtomixAI.Atomic.Commands
                 Autodesk.Revit.DB.FilterRule ruleBase = null;
 
                 switch (param.Item1.StorageType)
-                { /*
+                { 
                     case StorageType.String:
 
                         rule = op switch
                         {
-                            "contains" => ParameterFilterRuleFactory.CreateContainsRule(param.Id, aiValueStr),
-                            "not_contains" => ParameterFilterRuleFactory.CreateNotContainsRule(param.Id, aiValueStr),
-                            "begins" => ParameterFilterRuleFactory.CreateBeginsWithRule(param.Id, aiValueStr),
-                            "not_begins" => ParameterFilterRuleFactory.CreateNotBeginsWithRule(param.Id, aiValueStr),
-                            "ends" => ParameterFilterRuleFactory.CreateEndsWithRule(param.Id, aiValueStr),
-                            "not_ends" => ParameterFilterRuleFactory.CreateNotEndsWithRule(param.Id, aiValueStr),
-                            "==" => ParameterFilterRuleFactory.CreateEqualsRule(param.Id, aiValueStr),
-                            "!=" => ParameterFilterRuleFactory.CreateNotEqualsRule(param.Id, aiValueStr),
-                            _ => ParameterFilterRuleFactory.CreateEqualsRule(param.Id, aiValueStr)
+                            "contains" => ParameterFilterRuleFactory.CreateContainsRule(param.Item1.Id, aiValueStr),
+                            "not_contains" => ParameterFilterRuleFactory.CreateNotContainsRule(param.Item1.Id, aiValueStr),
+                            "begins" => ParameterFilterRuleFactory.CreateBeginsWithRule(param.Item1.Id, aiValueStr),
+                            "not_begins" => ParameterFilterRuleFactory.CreateNotBeginsWithRule(param.Item1.Id, aiValueStr),
+                            "ends" => ParameterFilterRuleFactory.CreateEndsWithRule(param.Item1.Id, aiValueStr),
+                            "not_ends" => ParameterFilterRuleFactory.CreateNotEndsWithRule(param.Item1.Id, aiValueStr),
+                            "==" => ParameterFilterRuleFactory.CreateEqualsRule(param.Item1.Id, aiValueStr),
+                            "!=" => ParameterFilterRuleFactory.CreateNotEqualsRule(param.Item1.Id, aiValueStr),
+                            _ => ParameterFilterRuleFactory.CreateEqualsRule(param.Item1.Id, aiValueStr)
                         };
                         break;
-                    */
+                    
                     case StorageType.Double:
                         FilterNumericRuleEvaluator doubleEvaluator = op switch
                         {
@@ -192,11 +192,11 @@ namespace AtomixAI.Atomic.Commands
                         break;
                 }
 
-                if (param.Item1.StorageType != StorageType.String && rule != null)
+                if (rule != null)
                 {
                     resultIds = collector.WherePasses(new ElementParameterFilter(rule)).ToElementIds();
                 }
-                else if(param.Item1.StorageType == StorageType.String)
+                /*if(param.Item1.StorageType == StorageType.String && (resultIds == null || resultIds.Count ==0))
                 {
                     System.Diagnostics.Debug.WriteLine($"[PARAM_FILTER] collector count {collector.GetElementCount()}.");
 
@@ -225,6 +225,7 @@ namespace AtomixAI.Atomic.Commands
 
                     resultIds = filteredElements.Select(el => el.Id).ToList();
                 }
+                */
             }
 
             return resultIds;

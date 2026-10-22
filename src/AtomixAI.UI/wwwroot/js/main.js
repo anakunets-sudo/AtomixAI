@@ -4,6 +4,7 @@ const inputField = document.getElementById('userInput');
 const themeToggle = document.getElementById('themeToggle');
 const micBtn = document.getElementById('micBtn');
 const pasteClipboardBtn = document.getElementById('pasteClipboardBtn');
+let clipboardPasteRange = null;
 let isMicActive = false;
 let statusMsgId = null;
 let thinkingMsgId = null;
@@ -156,19 +157,32 @@ inputField.addEventListener('input', function () {
 
 resizeInputField();
 
-pasteClipboardBtn.addEventListener('mousedown', event => event.preventDefault());
-pasteClipboardBtn.addEventListener('click', () => sendAction('paste_clipboard'));
+pasteClipboardBtn.addEventListener('mousedown', event => {
+    event.preventDefault();
+    clipboardPasteRange = window.Atomix.EditorController.getCaretRange();
+});
+pasteClipboardBtn.addEventListener('click', () => {
+    clipboardPasteRange = window.Atomix.EditorController.getCaretRange() || clipboardPasteRange;
+    sendAction('paste_clipboard');
+});
 
 function updateClipboardPasteButton(available) {
     pasteClipboardBtn.hidden = !available;
 }
 
-function insertClipboardText(text) {
-    if (typeof text !== 'string' || text.length === 0) {
+function insertClipboardPayload(editable, payload, savedRange = null) {
+    if (!editable || typeof payload?.text !== 'string' || typeof payload?.html !== 'string') {
+        return;
+    }
+
+    const text = trimClipboardText(payload.text.trim()
+        ? payload.text
+        : (payload.html ? htmlToPlainText(payload.html) : ''));
+    if (!text) {
         updateClipboardPasteButton(false);
         return;
     }
-    insertClipboardContent(inputField, '', text);
+    insertClipboardContent(editable, payload.html, text, savedRange);
     updateClipboardPasteButton(true);
 }
 
@@ -194,10 +208,13 @@ document.addEventListener('paste', function (event) {
     event.stopPropagation();
 
     readClipboardPayload(event, Boolean(editable)).then(payload => {
-        const text = payload.text || (payload.html ? htmlToPlainText(payload.html) : '');
         if (editable) {
-            insertClipboardContent(editable, payload.html, text);
-        } else if (text) {
+            insertClipboardPayload(editable, payload);
+        } else {
+            const text = trimClipboardText(payload.text.trim()
+                ? payload.text
+                : (payload.html ? htmlToPlainText(payload.html) : ''));
+            if (!text) return;
             const start = target.selectionStart;
             const end = target.selectionEnd;
             target.value = target.value.substring(0, start) + text + target.value.substring(end);
@@ -245,6 +262,7 @@ function readClipboardText() {
 }
 
 function htmlToPlainText(html) {
+    html = extractClipboardHtmlFragment(html);
     const safeHtml = typeof DOMPurify !== 'undefined' && DOMPurify.isSupported
         ? sanitizeClipboardHtml(html)
         : '';
@@ -253,9 +271,70 @@ function htmlToPlainText(html) {
     return template.content.textContent || '';
 }
 
-function insertClipboardContent(editable, html, text) {
+function extractClipboardHtmlFragment(html) {
+    const startMarker = '<!--StartFragment-->';
+    const endMarker = '<!--EndFragment-->';
+    const start = html.indexOf(startMarker);
+    const end = html.indexOf(endMarker);
+    if (start >= 0 && end > start) {
+        return html.slice(start + startMarker.length, end);
+    }
+
+    const firstTag = html.search(/<[a-z][\s/>]/i);
+    return firstTag > 0 ? html.slice(firstTag) : html;
+}
+
+function trimClipboardText(text) {
+    return text.trim();
+}
+
+function trimClipboardHtmlBoundaryWhitespace(fragment) {
+    const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+    }
+
+    for (const node of textNodes) {
+        node.textContent = node.textContent.replace(/^\s+/, '');
+        if (node.textContent) break;
+    }
+    for (let index = textNodes.length - 1; index >= 0; index--) {
+        const node = textNodes[index];
+        node.textContent = node.textContent.replace(/\s+$/, '');
+        if (node.textContent) break;
+    }
+}
+
+function insertClipboardContent(editable, html, text, savedRange = null) {
+    text = trimClipboardText(text);
+    const template = document.createElement('template');
+    html = extractClipboardHtmlFragment(html);
+    const safeHtml = html && typeof DOMPurify !== 'undefined' && DOMPurify.isSupported
+        ? sanitizeClipboardHtml(html)
+        : '';
+    template.innerHTML = safeHtml;
+    trimClipboardHtmlBoundaryWhitespace(template.content);
+    const fragment = template.content;
+    if (!fragment.childNodes.length && text) fragment.appendChild(document.createTextNode(text));
+    if (!fragment.textContent && !fragment.querySelector('br')) return;
+
+    if (window.Atomix.ChipsController) {
+        fragment.querySelectorAll('span[data-chip-id]').forEach(chip => {
+            // Вставка в поле ввода — чипсы остаются редактируемыми.
+            window.Atomix.ChipsController.restoreMessageTooltip(chip, chatChips, { editable: true });
+        });
+    }
+    fragment.querySelectorAll('span.alias-btn').forEach(tag => {
+        tag.contentEditable = 'false';
+    });
+
     const selection = window.getSelection();
-    let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    let range = savedRange &&
+        editable.contains(savedRange.startContainer) &&
+        editable.contains(savedRange.endContainer)
+        ? savedRange.cloneRange()
+        : selection?.rangeCount ? selection.getRangeAt(0) : null;
     if (!range || !editable.contains(range.startContainer)) {
         range = document.createRange();
         range.selectNodeContents(editable);
@@ -263,33 +342,18 @@ function insertClipboardContent(editable, html, text) {
     }
     range.deleteContents();
 
-    const template = document.createElement('template');
-    const safeHtml = html && typeof DOMPurify !== 'undefined' && DOMPurify.isSupported
-        ? sanitizeClipboardHtml(html)
-        : '';
-    template.innerHTML = safeHtml;
-    if (window.Atomix.ChipsController) {
-        template.content.querySelectorAll('span[data-chip-id]').forEach(chip => {
-            // Вставка в поле ввода — чипсы остаются редактируемыми.
-            window.Atomix.ChipsController.restoreMessageTooltip(chip, chatChips, { editable: true });
-        });
-    }
-    template.content.querySelectorAll('span.alias-btn').forEach(tag => {
-        tag.contentEditable = 'false';
-    });
-
-    const fragment = template.content;
-    if (!fragment.childNodes.length && text) fragment.appendChild(document.createTextNode(text));
     const lastInserted = fragment.lastChild;
     if (!lastInserted) return;
 
     range.insertNode(fragment);
     range.setStartAfter(lastInserted);
     range.collapse(true);
+    editable.focus();
     if (selection) {
         selection.removeAllRanges();
         selection.addRange(range);
     }
+    window.Atomix.EditorController.saveSelection();
     editable.dispatchEvent(new Event('input', { bubbles: true }));
 }
 

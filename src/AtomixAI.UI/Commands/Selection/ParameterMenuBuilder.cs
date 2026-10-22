@@ -4,10 +4,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Data.Common;
-using System.Runtime.Serialization;
-using System.Windows.Controls;
+using System.Net;
 
 namespace AtomixAI.UI.Commands.Selection
 {
@@ -16,25 +13,105 @@ namespace AtomixAI.UI.Commands.Selection
         public static List<object> Build(Element paramHolder, bool isType, Element originalElement)
         {
             var items = new List<object>();
+            var groups = new List<ParameterMenuGroup>();
+            var groupsById = new Dictionary<string, ParameterMenuGroup>(StringComparer.Ordinal);
 
-            foreach (Parameter parameter in paramHolder.GetOrderedParameters())
+            var allBipNames = new List<string>();
+
+            foreach (Parameter parameter in paramHolder.Parameters)
             {
                 string? name = parameter.Definition?.Name;
                 if (string.IsNullOrEmpty(name)) continue;
-                if (parameter.Definition is InternalDefinition internalDef && !internalDef.Visible) continue;
+
+                if( parameter.IsReadOnly &&
+                    string.IsNullOrEmpty(parameter.AsValueString()) 
+                    && string.IsNullOrEmpty(parameter.AsString())
+                    && parameter.AsElementId() == ElementId.InvalidElementId
+                    && parameter.AsDouble() == 0 
+                    && parameter.AsInteger() == 0) continue;
+
+                bool isIdLessZero = false;
+
+#if REVIT2024_OR_GREATER 
+                isIdLessZero = parameter.Id.Value < 0;
+#else 
+                isIdLessZero = parameter.Id.IntegerValue < 0;
+#endif
+                if (isIdLessZero && allBipNames.Contains(name)) continue;
+
+                allBipNames.Add(name);
 
                 string value = GetDisplayValue(parameter);
                 string label = string.IsNullOrEmpty(value) ? name : $"{name}: {value}";
-                items.Add(new
+                GetParameterGroup(parameter.Definition!, out string groupId, out string groupName);
+
+                if (!groupsById.TryGetValue(groupId, out ParameterMenuGroup group))
+                {
+                    group = new ParameterMenuGroup(groupId, groupName);
+                    groupsById.Add(groupId, group);
+                    groups.Add(group);
+                }
+
+                group.Items.Add(new
                 {
                     id = BuildParameterItemId(paramHolder, parameter, originalElement, isType),
                     name = label,
+                    searchText = name,
                     hasChildren = false,
-                    isParameterChip = true
+                    isParameterChip = true,
+                    groupKey = groupId
                 });
             }
 
+            allBipNames = null;
+
+            // Группы — по имени, внутри — уже по имени параметра.
+            groups.Sort((a, b) =>
+            {
+                int byName = StringComparer.CurrentCultureIgnoreCase.Compare(a.Name, b.Name);
+                return byName != 0 ? byName : StringComparer.Ordinal.Compare(a.Id, b.Id);
+            });
+
+            foreach (ParameterMenuGroup group in groups)
+            {
+                items.Add(new
+                {
+                    id = $"param_group_{group.Id}",
+                    name = WebUtility.HtmlEncode($"{group.Name} ({group.Items.Count})"),
+                    isGroup = true,
+                    isCollapsibleGroup = true,
+                    hasChildren = false
+                });
+                items.AddRange(group.Items);
+            }
+
             return items;
+        }
+
+        private static void GetParameterGroup(Definition definition, out string groupId, out string groupName)
+        {
+#if REVIT2024_OR_GREATER
+            ForgeTypeId groupTypeId = definition.GetGroupTypeId();
+            groupId = groupTypeId.TypeId;
+            groupName = LabelUtils.GetLabelForGroup(groupTypeId);
+#else
+            BuiltInParameterGroup groupType = definition.ParameterGroup;
+            groupId = ((int)groupType).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            groupName = LabelUtils.GetLabelFor(groupType);
+#endif
+        }
+
+        private sealed class ParameterMenuGroup
+        {
+            public string Id { get; }
+            public string Name { get; }
+            public List<object> Items { get; } = new List<object>();
+
+            public ParameterMenuGroup(string id, string name)
+            {
+                Id = id;
+                Name = name;
+            }
         }
 
         internal static ChipPayload CreateChip(UIApplication app, string itemId)
@@ -55,7 +132,7 @@ namespace AtomixAI.UI.Commands.Selection
             Parameter? parameter = null;
             if (holder != null)
             {
-                foreach (Parameter candidate in holder.GetOrderedParameters())
+                foreach (Parameter candidate in holder.Parameters)
                 {
                     if (candidate.Id.GetIdValue() == parameterId)
                     {

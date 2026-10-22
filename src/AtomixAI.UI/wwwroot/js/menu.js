@@ -2,6 +2,7 @@
 window.Atomix = window.Atomix || {};
 window.Atomix.MenuController = {
     VISIBLE_ROWS: 4,
+    SEARCH_DELAY_MS: 350,
     get el() { return document.getElementById('ai-menu'); },
     get backHost() { return document.getElementById('menu-back-host'); },
     get searchEl() { return document.getElementById('menu-search'); },
@@ -19,6 +20,7 @@ window.Atomix.MenuController = {
     searchQuery: '',
     collapsedGroups: {},
     _searchBound: false,
+    _searchTimer: null,
     chipRequestSequence: 0,
     pendingChipRequestId: null,
     update(newItems, isBackAction = false, title = null) {
@@ -70,7 +72,8 @@ window.Atomix.MenuController = {
         return !!(item && item.isCollapsibleGroup);
     },
     _nameMatches(item, q) {
-        return this._plainName(item && item.name).toLowerCase().includes(q);
+        const text = item && item.searchText != null ? item.searchText : item && item.name;
+        return this._plainName(text).toLowerCase().includes(q);
     },
     _firstSelectableIndex(list) {
         const items = list || [];
@@ -133,10 +136,18 @@ window.Atomix.MenuController = {
         return !!(input && document.activeElement === input);
     },
     _resetSearch() {
+        if (this._searchTimer !== null) {
+            clearTimeout(this._searchTimer);
+            this._searchTimer = null;
+        }
         this.searchQuery = '';
         if (this.searchInput) this.searchInput.value = '';
     },
     applySearch() {
+        if (this._searchTimer !== null) {
+            clearTimeout(this._searchTimer);
+            this._searchTimer = null;
+        }
         const input = this.searchInput;
         this.searchQuery = (input && input.value || '').trim();
         const view = this._viewItems();
@@ -383,6 +394,13 @@ window.Atomix.MenuController = {
         const btn = this.searchBtn;
         if (!input || !btn) return;
         this._searchBound = true;
+        input.addEventListener('input', () => {
+            if (this._searchTimer !== null) clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(() => {
+                this._searchTimer = null;
+                this.applySearch();
+            }, this.SEARCH_DELAY_MS);
+        });
         input.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter') return;
             e.preventDefault();

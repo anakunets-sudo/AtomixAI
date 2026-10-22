@@ -32,7 +32,9 @@ window.Atomix.RevitBridge.onMessage((data) => {
         updateClipboardPasteButton(Boolean(data.available));
     }
     else if (data.action === 'clipboard_text') {
-        insertClipboardText(data.text);
+        const pasteRange = clipboardPasteRange;
+        clipboardPasteRange = null;
+        insertClipboardPayload(inputField, { text: data.text, html: data.html }, pasteRange);
     }
     // 3. Инъекция распознанного голоса в текстовое поле
     else if (data.type === 'voice_input') {

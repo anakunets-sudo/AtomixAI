@@ -64,7 +64,7 @@ DEFAULT_PROVIDERS = {
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
-        "model": "gpt-5.6-luna",
+        "model": "google/gemini-3.5-flash-lite",
     },
 }
 
@@ -75,14 +75,14 @@ USER_CFG = os.path.join(
 PROVIDER = { 
     "only": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"], 
     "order": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"],
-    "allow_fallbacks": False,
+    "allow_fallbacks": True,
     "require_parameters": True 
     }
 
 PROVIDER_FLEX = {
     "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4", "cloudflare"],
-    "allow_fallbacks": False, 
-    "sort": "throughput" 
+     "allow_fallbacks": True, 
+     "sort": "throughput" 
     }
 
 """

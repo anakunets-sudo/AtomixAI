@@ -437,6 +437,10 @@ window.Atomix.ChipsController = {
 
     // Текущий Range, только если он внутри поля ввода.
     _captureCaretIn(input) {
+        const editor = window.Atomix.EditorController;
+        if (editor && typeof editor.getCaretRange === 'function') {
+            return editor.getCaretRange();
+        }
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return null;
         const range = selection.getRangeAt(0);
