@@ -181,9 +181,13 @@ body {
     opacity: 1;
 }
 
-.alias-btn:hover, .bim-chip:hover {
+.alias-btn:hover {
         opacity: 0.8;
     }
+
+    .bim-chip:hover{
+    background:var(--scroll-thumb);
+} 
 
 #chat {
     flex: 1;
@@ -389,6 +393,7 @@ body {
     width: 18px;
     height: 18px;
     margin: -8px 0 -4px 0;
+    stroke-width: 1;
 }
 
 
@@ -640,6 +645,7 @@ opacity: .8;
 .menu-item.is-collapsible-group:hover {
     border-color: var(--accent);
 }
+
 .menu-group-arrow {
     display: inline-flex;
     align-items: center;
@@ -668,8 +674,23 @@ opacity: .8;
     overflow: hidden;
 }
 
+.menu-item.menu-parameter-branch {
+    border: 1px solid var(--scroll-thumb);
+    border-radius: 12px;
+    padding: 0px 6px 1px 6px;
+    display: inline-flex;
+    /*color: var(--accent);*/
+    min-height: 0;
+    white-space: nowrap;
+    overflow: clip;
+    text-overflow: ellipsis;
+    max-width: -webkit-fill-available;
+    margin: 0 6px 6px 0;
+}
+
 .menu-item.menu-model-data {
-    display: contents;
+    display: inline;
+    padding: 0;
 } 
 
 .menu-icon {
@@ -742,6 +763,15 @@ opacity: .8;
     left: 48px;
 }
 
+.paste-btn:focus:not(:focus-visible) {
+    outline: none;
+}
+/*
+.paste-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+*/
 .paste-btn[hidden] {
     display: none;
 }
@@ -924,15 +954,18 @@ input:checked + .slider:before {
 /* --- СТИЛИ ДЛЯ БИМ-ЧИПСОВ --- */
 .bim-chip {
     /*background: var(--accent);*/
-    color: var(--accent);
-    padding: 0px 8px 1px 3px;
+    /*color: var(--accent);*/
+    padding: 0px 6px 1px 6px;
     border-radius: 12px;
-    margin: 0;
+    margin: 0 0 4px 0;
     cursor: pointer;
-    border: 1px solid var(--accent);
-    white-space: nowrap;
+    border: 1px solid var(--scroll-thumb);
     position: relative;
     display: inline-block;
+    white-space: nowrap;
+    overflow: clip;
+    text-overflow: ellipsis;
+    max-width: -webkit-fill-available;
 }
 
 .chip-label {
@@ -956,7 +989,7 @@ input:checked + .slider:before {
 
 /* Наведение на редактируемый чипс: заливка акцентом, белый текст. */
 .bim-chip.chip-editable:hover {
-    background: var(--accent);
+    background: var(--scroll-thumb);
     color: #fff;
     opacity: 1;
 }
@@ -994,7 +1027,7 @@ input:checked + .slider:before {
 
 /* Чипс с подтверждённым пользователем значением: карандаш остаётся справа. */
 .bim-chip.chip-edited {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: color-mix(in srgb, var(--scroll-thumb) 18%, transparent);
 }
 
 .bim-chip.chip-edited .chip-edit {
@@ -1002,7 +1035,7 @@ input:checked + .slider:before {
 }
 
 .bim-chip.chip-edited:hover {
-    background: var(--accent);
+    background: var(--scroll-thumb);
 }
 
 /* В режиме правки карандаш и заливка не нужны. */
@@ -1011,12 +1044,12 @@ input:checked + .slider:before {
 }
 
 .bim-chip.chip-editing:hover {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    color: var(--accent);
+    background: color-mix(in srgb, var(--scroll-thumb) 18%, transparent);
+    color: var(--text);
 }
 
 .bim-chip.chip-editing:hover .chip-label {
-    color: var(--accent);
+    color: var(--text);
 }
 
 /* Кнопка подтверждения: показывается вместо карандаша в режиме редактирования. */

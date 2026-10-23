@@ -5,11 +5,80 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Reflection.Metadata;
 
 namespace AtomixAI.UI.Commands.Selection
 {
     public static class ParameterMenuBuilder
     {
+        internal static object? BuildBuiltInParameterItem(Element originalElement, BuiltInParameter builtInParameter, bool isType)
+        {
+            Element paramHolder = originalElement;
+            if (isType)
+            {
+                ElementId typeId = originalElement.GetTypeId();
+                if (typeId == ElementId.InvalidElementId) return null;
+                paramHolder = originalElement.Document.GetElement(typeId);
+                if (paramHolder == null) return null;
+            }
+
+            Autodesk.Revit.DB.Parameter? parameter = paramHolder.get_Parameter(builtInParameter);
+            return parameter?.Definition == null
+                ? null
+                : BuildParameterItem(paramHolder, parameter, originalElement, isType);
+        }
+
+        private static object BuildParameterItem(Element paramHolder, Autodesk.Revit.DB.Parameter parameter, Element originalElement, bool isType)
+        {
+            string name = parameter.Definition!.Name;
+            string value = GetDisplayValue(parameter);
+            string label = string.IsNullOrEmpty(value) ? name : $"{name}: {value}";
+            return new
+            {
+                id = BuildParameterItemId(paramHolder, parameter, originalElement, isType),
+                name = WebUtility.HtmlEncode(label),
+                searchText = name,
+                hasChildren = false,
+                isParameterChip = true,
+                isMenuParameterBranch = true
+            };
+        }
+
+        internal static object? BuildNameItem(Element originalElement)
+        {
+            if (originalElement == null || string.IsNullOrEmpty(originalElement.Name)) return null;
+
+            string value = originalElement.Name;
+            string label = $"{value}";
+            return new
+            {
+                id = $"name:{originalElement.Name}:{originalElement.Id.GetIdValue()}:{0}",
+                name = WebUtility.HtmlEncode(label),
+                searchText = label,
+                hasChildren = false,
+                isParameterChip = true,
+                isMenuParameterBranch = true
+            };
+        }
+
+        internal static object? BuildIdItem(Element originalElement)
+        {
+            if (originalElement == null || originalElement.Id == ElementId.InvalidElementId) return null;
+
+            string name = "Id";
+            string value = originalElement.Id.GetIdValue().ToString();
+            string label = string.IsNullOrEmpty(value) ? name : $"{name}: {value}";
+            return new
+            {
+                id = $"id:{originalElement.Name}:{originalElement.Id.GetIdValue()}:{0}",
+                name = WebUtility.HtmlEncode(label),
+                searchText = label,
+                hasChildren = false,
+                isParameterChip = true,
+                isMenuParameterBranch = true
+            };
+        }
+
         public static List<object> Build(Element paramHolder, bool isType, Element originalElement)
         {
             var items = new List<object>();
@@ -18,7 +87,7 @@ namespace AtomixAI.UI.Commands.Selection
 
             var allBipNames = new List<string>();
 
-            foreach (Parameter parameter in paramHolder.Parameters)
+            foreach (Autodesk.Revit.DB.Parameter parameter in paramHolder.Parameters)
             {
                 string? name = parameter.Definition?.Name;
                 if (string.IsNullOrEmpty(name)) continue;
@@ -124,15 +193,15 @@ namespace AtomixAI.UI.Commands.Selection
                 (parts[4] != "0" && parts[4] != "1"))
                 throw new ArgumentException("Invalid parameter chip selection.");
 
-            Document? doc = app.ActiveUIDocument?.Document;
+            Autodesk.Revit.DB.Document? doc = app.ActiveUIDocument?.Document;
             if (doc == null) throw new ArgumentException("No active Revit document found.");
 
             Element? holder = doc.GetElement(ToElementId(holderId));
             Element? originalElement = doc.GetElement(ToElementId(elementId));
-            Parameter? parameter = null;
+            Autodesk.Revit.DB.Parameter? parameter = null;
             if (holder != null)
             {
-                foreach (Parameter candidate in holder.Parameters)
+                foreach (Autodesk.Revit.DB.Parameter candidate in holder.Parameters)
                 {
                     if (candidate.Id.GetIdValue() == parameterId)
                     {
@@ -155,9 +224,9 @@ namespace AtomixAI.UI.Commands.Selection
 
         // Подпись чипса: "#<Name>" для пустого значения, иначе "#<Name>: <Value>".
         private static string BuildChipLabel(string name, string value) =>
-            string.IsNullOrEmpty(value) ? $"#{name}" : $"#{name}: {value}";
+            string.IsNullOrEmpty(value) ? $"{name}" : $"{name}: {value}";
 
-        private static JObject BuildData(Document doc, Parameter parameter, Element paramHolder, Element originalElement, bool isType)
+        private static JObject BuildData(Autodesk.Revit.DB.Document doc, Autodesk.Revit.DB.Parameter parameter, Element paramHolder, Element originalElement, bool isType)
         {
             string name = parameter.Definition!.Name;
             string value = GetDisplayValue(parameter);
@@ -233,7 +302,7 @@ namespace AtomixAI.UI.Commands.Selection
             return data;
         }
 
-        private static string GetDisplayValue(Parameter parameter)
+        private static string GetDisplayValue(Autodesk.Revit.DB.Parameter parameter)
         {
             if (!parameter.HasValue) return string.Empty;
             string? value = parameter.StorageType == StorageType.String ? parameter.AsString() : parameter.AsValueString();
@@ -242,7 +311,7 @@ namespace AtomixAI.UI.Commands.Selection
             return value ?? string.Empty;
         }
 
-        private static string BuildParameterItemId(Element holder, Parameter parameter, Element originalElement, bool isType) =>
+        private static string BuildParameterItemId(Element holder, Autodesk.Revit.DB.Parameter parameter, Element originalElement, bool isType) =>
             $"param:{holder.Id.GetIdValue()}:{parameter.Id.GetIdValue()}:{originalElement.Id.GetIdValue()}:{(isType ? 1 : 0)}";
 
         private static ElementId ToElementId(long id)
@@ -254,7 +323,7 @@ namespace AtomixAI.UI.Commands.Selection
 #endif
         }
 
-        private static string GetShortUnitLabel(Document doc, ForgeTypeId unitTypeId)
+        private static string GetShortUnitLabel(Autodesk.Revit.DB.Document doc, ForgeTypeId unitTypeId)
         {
             if (unitTypeId == null || string.IsNullOrEmpty(unitTypeId.TypeId))
                 return string.Empty;

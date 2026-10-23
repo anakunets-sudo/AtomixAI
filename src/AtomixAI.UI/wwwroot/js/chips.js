@@ -261,7 +261,7 @@ window.Atomix.ChipsController = {
 
         chip._editing = true;
         chip.classList.add('chip-editing');
-        label.textContent = '#' + name + ': ';
+        label.textContent = name + ': ';
 
         const input = document.createElement('input');
         input.type = 'text';

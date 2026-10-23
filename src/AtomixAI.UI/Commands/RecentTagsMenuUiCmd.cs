@@ -29,7 +29,7 @@ namespace AtomixAI.UI.Commands
                     new
                     {
                         id = "model-data",
-                        name = MenuResponse.Label("", Localizer.T("menu.modelData")),
+                        name = MenuResponse.Label("", Localizer.T("menu.data")),
                         hasChildren = true
                     }
                 });

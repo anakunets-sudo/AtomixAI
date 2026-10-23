@@ -30,7 +30,7 @@ FEW_SHOT_EXAMPLES = [
     # Chip example: use the referenced chip value to populate the command schema.
     {
         "role": "user",
-        "content": "Create a wall with the length shown in [chip_7].\n<UNTRUSTED_CHIP_CONTEXT>\n[{\"turn\": 0, \"message\": \"Create a wall with the length shown in [chip_7].\", \"chips\": [{\"id\": \"chip_7\", \"label\": \"#Width: 900\", \"data\": {\"kind\": \"revit_parameter\", \"parameter_Name\": \"Width\", \"parameter_Value\": \"900\", \"parameter_Unit_Label\": \"mm\", \"parameter_Storage_Type\": \"Double\", \"is_Type\": true, \"has_Value\": true, \"is_ReadOnly\": false, \"parameter_Id\": \"-1010101\", \"element_Id\": \"456789\", \"parameter_Guid\": \"\", \"parameter_Holder_Id\": \"456789\", \"element_Name\": \"Door 101\", \"element_Сategory\": \"Doors\", \"document_Title\": \"Project1.rvt\", \"document_Path\": \"C:/Projects/Project1.rvt\"}}]}]\n</UNTRUSTED_CHIP_CONTEXT>"
+        "content": "Create a wall with the length shown in [chip_7].\n<UNTRUSTED_CHIP_CONTEXT>\n[{\"turn\": 0, \"message\": \"Create a wall with the length shown in [chip_7].\", \"chips\": [{\"id\": \"chip_7\", \"label\": \"Width: 900\", \"data\": {\"kind\": \"revit_parameter\", \"parameter_Name\": \"Width\", \"parameter_Value\": \"900\", \"parameter_Unit_Label\": \"mm\", \"parameter_Storage_Type\": \"Double\", \"is_Type\": true, \"has_Value\": true, \"is_ReadOnly\": false, \"parameter_Id\": \"-1010101\", \"element_Id\": \"456789\", \"parameter_Guid\": \"\", \"parameter_Holder_Id\": \"456789\", \"element_Name\": \"Door 101\", \"element_Сategory\": \"Doors\", \"document_Title\": \"Project1.rvt\", \"document_Path\": \"C:/Projects/Project1.rvt\"}}]}]\n</UNTRUSTED_CHIP_CONTEXT>"
     },
     {
         "role": "assistant",
@@ -54,7 +54,7 @@ FEW_SHOT_EXAMPLES = [
     # Chip with technical fields: fill EVERY matching Params field, including ParameterId and IsType.
     {
         "role": "user",
-        "content": "Find walls where the mark shown in [chip_4] begins with G\n<UNTRUSTED_CHIP_CONTEXT>\n[{\"turn\": 0, \"message\": \"Find walls where the mark shown in [chip_4] begins with G\", \"chips\": [{\"id\": \"chip_4\", \"label\": \"#Mark: G\", \"data\": {\"kind\": \"revit_parameter\", \"parameter_Name\": \"Mark\", \"parameter_Value\": \"G\", \"parameter_Unit_Label\": \"\", \"parameter_Storage_Type\": \"String\", \"is_Type\": false, \"has_Value\": true, \"is_ReadOnly\": false, \"parameter_Id\": \"-1010101\", \"element_Id\": \"123456\", \"parameter_Guid\": \"\", \"parameter_Holder_Id\": \"123456\", \"element_Name\": \"Wall 101\", \"element_Сategory\": \"Walls\"}}]}]\n</UNTRUSTED_CHIP_CONTEXT>"
+        "content": "Find walls where the mark shown in [chip_4] begins with G\n<UNTRUSTED_CHIP_CONTEXT>\n[{\"turn\": 0, \"message\": \"Find walls where the mark shown in [chip_4] begins with G\", \"chips\": [{\"id\": \"chip_4\", \"label\": \"Mark: G\", \"data\": {\"kind\": \"revit_parameter\", \"parameter_Name\": \"Mark\", \"parameter_Value\": \"G\", \"parameter_Unit_Label\": \"\", \"parameter_Storage_Type\": \"String\", \"is_Type\": false, \"has_Value\": true, \"is_ReadOnly\": false, \"parameter_Id\": \"-1010101\", \"element_Id\": \"123456\", \"parameter_Guid\": \"\", \"parameter_Holder_Id\": \"123456\", \"element_Name\": \"Wall 101\", \"element_Сategory\": \"Walls\"}}]}]\n</UNTRUSTED_CHIP_CONTEXT>"
     },
     {
         "role": "assistant",
@@ -408,15 +408,23 @@ MANDATORY FLAT PIPELINE SEQUENCE:
 When a user requests to find, select, or count elements, you MUST build a sequential chain of independent tools using data tags (#tag_name_NUMBER) to pass elements between them.
 
 1. STEP 1: INITIALIZATION (MANDATORY START)
-   Always start the pipeline by calling 'search_init' to gather the baseline set of elements.
+   Always start the pipeline by calling tool 'search_init' to gather the baseline set of elements.
    - Arguments: {"Params": {"Scope": "ActiveView" | "Project" | "Selection"}, "Out": "#init_elements_1"}
 
 2. STEP 2: QUICK FILTERING (MANDATORY NEXT STEP)
-   Immediately pass the initialized tag into 'filter_elements' to restrict the search by Revit categories or C# classes using fast indexing.
+   Immediately pass the initialized tag into tool 'filter_elements' to restrict the search by Revit categories or C# classes using fast indexing.
    - Arguments: {"In": "#init_elements_1", "Params": {"Categories": ["OST_XXX"], "ClassName": "XXX"}, "Out": "#filtered_elements_1"}
 
-3. STEP 3: PARAMETER FILTERING (OPTIONAL SUBSEQUENT STEP)
-   If the user specifies constraints based on values (e.g., thickness, width, marks, comments), append one or more 'filter_parameters' calls.
+3. STAGE 3: FILTERING BY STRUCTURAL BOUNDARIES (OPTIONAL SUBSEQUENT STEP)
+    If you need to filter incoming elements based on structural boundaries—such as levels, worksets, or design options—use the 'filter_spatial' tool.
+    When a referenced chip supplies fields, such as: "Levels", "WorksetName", or "DesignOptionName" - fill ALL of those fields from the chip data.
+
+4. STAGE 4: FILTERING BY ROOMS, SPACES OR AREAS (OPTIONAL SUBSEQUENT STEP)
+    If you need to filter incoming elements based on rooms, spaces or areas use 'filter_rooms' tool.
+    When a referenced chip supplies fields, such as: "RoomIds", "RoomNames", or "RoomNumbers" - fill ALL of those fields from the chip data.
+
+5. STEP 5: PARAMETER FILTERING (OPTIONAL SUBSEQUENT STEP)
+   If the user specifies constraints based on values (e.g., thickness, width, marks, comments), append one or more 'filter_parameters' tool calls.
    - Arguments: {"In": "#filtered_elements_1", "Params": {"FilterType": "Parameter", "ParameterName": "Exact_Name", "ParameterId": "ID", "IsType": "true/false", "Operator": "OP", "ParameterValue": "VAL"}, "Out": "#final_elements_1"}
    - When a referenced chip supplies ParameterName, ParameterId, ParameterGuid, IsType or ParameterValue, fill ALL of those fields from the chip data (see the FULL MAPPING RULE in CHIP_CONTEXT_RULES).
    - ParameterName is mandatory and must come from the user (or an explicit synonym they used). Never invent Mark/Name/Type Name when they only said "starts with X" / "contains Y".

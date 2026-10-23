@@ -31,7 +31,7 @@
   "footer.settings": "Umgebungseinstellungen anzeigen",
   "footer.aiCore": "KI-Kern:",
   "footer.aiModel": "KI-Modell:",
-  "footer.modelName": "Google",
+  "footer.modelName": "Gemini",
 
   "rate.markSolution": "Als Lösung markieren",
   "rate.markedSolution": "Als Lösung markiert",
@@ -40,7 +40,7 @@
 
   "menu.recent": "Zuletzt verwendet",
   "menu.tags": "Schlagwörter",
-  "menu.modelData": "Modelldaten",
+  "menu.data": "Daten",
   "menu.selection": "Auswahl",
   "menu.commands": "Befehle",
   "menu.back": "Zurück",

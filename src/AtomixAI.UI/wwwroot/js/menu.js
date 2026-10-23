@@ -129,6 +129,7 @@ window.Atomix.MenuController = {
         return result;
     },
     _needsSearch() {
+        if (this.items.some(item => item.isMenuParameterBranch)) return false;
         return this.items.filter(item => !item.isPinnedAction).length > this.VISIBLE_ROWS;
     },
     isSearchFocused() {
@@ -333,12 +334,15 @@ window.Atomix.MenuController = {
                 const collapsibleClass = isCollapsibleGroup ? ' is-collapsible-group' : '';
                 const childClass = isGroupChild ? ' is-group-child' : '';
                 const modelDataClass = menuChip ? ' menu-model-data' : '';
+                const parameterClass = item.isMenuParameterBranch
+                    ? ' menu-parameter-branch'
+                    : '';
                 const collapsed = isCollapsibleGroup && this.collapsedGroups[item.id];
                 const groupArrow = isCollapsibleGroup
                     ? `<span class="menu-group-arrow">${collapsed ? '&#xE76C;' : '&#xE70D;'}</span>`
                     : '';
                 const expandedAttribute = isCollapsibleGroup ? ` aria-expanded="${!collapsed}" role="button" tabindex="0"` : '';
-                return `<div class="menu-item ${isSel}${groupClass}${collapsibleClass}${childClass} ${modelDataClass}" data-index="${i}"${expandedAttribute}><span class="menu-item-text">${label}</span>${groupArrow}${arrowIcon}</div>`;
+                return `<div class="menu-item ${isSel}${groupClass}${collapsibleClass}${childClass}${parameterClass} ${modelDataClass}" data-index="${i}"${expandedAttribute}><span class="menu-item-text">${label}</span>${groupArrow}${arrowIcon}</div>`;
             }).join('');
         }
         this.listContainer.classList.toggle('is-scrollable', this._needsSearch());

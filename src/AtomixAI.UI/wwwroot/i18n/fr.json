@@ -31,7 +31,7 @@
   "footer.settings": "Afficher les paramètres d’environnement",
   "footer.aiCore": "Moteur IA :",
   "footer.aiModel": "Modèle IA :",
-  "footer.modelName": "Anthropic",
+  "footer.modelName": "Gemini",
 
   "rate.markSolution": "Marquer comme solution",
   "rate.markedSolution": "Marqué comme solution",
@@ -40,7 +40,7 @@
 
   "menu.recent": "Récents",
   "menu.tags": "Étiquettes",
-  "menu.modelData": "Données du modèle",
+  "menu.data": "Données",
   "menu.selection": "Sélection",
   "menu.commands": "Commandes",
   "menu.back": "Retour",

@@ -182,11 +182,17 @@ namespace AtomixAI.Atomic.Commands
                         break;
 
                     case StorageType.ElementId:
-
-                        int valId = int.Parse(aiValueStr);
+                                                
                         // Если ИИ ищет по Уровню, он должен передать Id этого уровня
                         FilterNumericRuleEvaluator idEvaluator = new FilterNumericEquals();
-                        ElementId idVal = new ElementId(valId);
+                        ElementId idVal;
+#if REVIT2024_OR_GREATER
+                        long valId = Convert.ToInt64(aiValueStr);
+                        idVal = new ElementId(valId);
+#else
+                        int ivalId = Convert.ToInt32(aiValueStr);
+                        idVal = new ElementId(ivalId);
+#endif
                         ruleBase = new FilterElementIdRule(provider, idEvaluator, idVal);
                         rule = (op == "!=") ? new FilterInverseRule(ruleBase) : ruleBase;
                         break;

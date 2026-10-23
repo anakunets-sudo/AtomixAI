@@ -31,7 +31,7 @@
   "footer.settings": "Expand environment settings",
   "footer.aiCore": "AI core:",
   "footer.aiModel": "AI model:",
-  "footer.modelName": "Anthropic",
+  "footer.modelName": "Gemini",
 
   "rate.markSolution": "Mark as solution",
   "rate.markedSolution": "Marked as solution",
@@ -40,7 +40,7 @@
 
   "menu.recent": "Recent",
   "menu.tags": "Tags",
-  "menu.modelData": "Model Data",
+  "menu.data": "Data",
   "menu.selection": "Selection",
   "menu.commands": "Commands",
   "menu.back": "Back",

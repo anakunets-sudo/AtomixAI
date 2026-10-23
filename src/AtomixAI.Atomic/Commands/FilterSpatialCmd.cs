@@ -12,17 +12,14 @@ namespace AtomixAI.Atomic.Commands
     [AiInfo(
         name: "filter_spatial",
         group: AtomicGroupType.Search,
-        description: "Filters incoming elements by structural boundaries like Levels, Rooms, Worksets, or Design Options.",
-        keywords: new[] { "level", "floor", "room", "space", "workset", "design option" })]
+        description: "Filters incoming elements by structural boundaries like Levels, Worksets, or Design Options.",
+        keywords: new[] { "level", "floor", "workset", "design option" })]
     public class FilterSpatialCmd : BaseAtomicCommand
     {
         public class SpatialFilterSchema : DynamicBimContract
         {
             [AiParam("List of target Level ElementIds or Level Names (e.g., ['12345', 'Level 2']). Leave empty if not filtering by level.", isRequired: false)]
             public List<string> Levels { get; set; }
-
-            [AiParam("List of Room Names or Room Numbers to search inside (e.g., ['Kitchen', '101']). Leave empty if not filtering by room.", isRequired: false)]
-            public List<string> Rooms { get; set; }
 
             [AiParam("The exact name of the Workset to restrict elements (e.g., 'Shared Levels and Grids').", isRequired: false)]
             public string WorksetName { get; set; }
@@ -112,16 +109,7 @@ namespace AtomixAI.Atomic.Commands
                 collector.WherePasses(new LogicalAndFilter(filters));
             }
 
-            // === ФИЛЬТР 4: КОМНАТЫ / ПРОСТРАНСТВА (Геометрический перебор - Медленный, идет в конце) ===
-            List<ElementId> finalIds;
-            if (myParams.Rooms != null && myParams.Rooms.Count > 0)
-            {
-                finalIds = FilterByRoomsGeometry(doc, collector, myParams.Rooms);
-            }
-            else
-            {
-                finalIds = collector.ToElementIds().ToList();
-            }
+            List<ElementId> finalIds = collector.ToElementIds().ToList();
 
             // 3. Безопасный пустой возврат через Exclude
             if (finalIds.Count == 0)
@@ -165,55 +153,6 @@ namespace AtomixAI.Atomic.Commands
                 if (matchedLevel != null)
                 {
                     result.Add(matchedLevel.Id);
-                }
-            }
-            return result;
-        }
-
-        private static List<ElementId> FilterByRoomsGeometry(Document doc, FilteredElementCollector currentCollector, List<string> roomQueries)
-        {
-            var result = new List<ElementId>();
-
-            // Находим целевые комнаты по имени или номеру
-            var targetRooms = new FilteredElementCollector(doc)
-                .OfClass(typeof(SpatialElement))
-                .Where(e => e is Autodesk.Revit.DB.Architecture.Room)
-                .Cast<Autodesk.Revit.DB.Architecture.Room>()
-                .Where(r => roomQueries.Any(q =>
-                    r.Name.Equals(q, StringComparison.OrdinalIgnoreCase) ||
-                    r.Number.Equals(q, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            if (targetRooms.Count == 0) return result;
-
-            // Заставляем Revit разрешить ленивый foreach
-            currentCollector.WherePasses(new ElementIsElementTypeFilter(false));
-
-            foreach (Element elem in currentCollector)
-            {
-                if (elem == null || elem.Location == null) continue;
-
-                XYZ point = null;
-                if (elem.Location is LocationPoint lp)
-                {
-                    point = lp.Point;
-                }
-                else if (elem.Location is LocationCurve lc)
-                {
-                    // Для линейных элементов (стены, воздуховоды) берем геометрический центр линии
-                    point = lc.Curve.Evaluate(0.5, true);
-                }
-
-                if (point == null) continue;
-
-                // Проверяем, находится ли точка элемента внутри какой-либо из целевых комнат
-                foreach (var room in targetRooms)
-                {
-                    if (room.IsPointInRoom(point))
-                    {
-                        result.Add(elem.Id);
-                        break;
-                    }
                 }
             }
             return result;

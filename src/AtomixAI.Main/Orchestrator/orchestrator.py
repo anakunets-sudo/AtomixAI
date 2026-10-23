@@ -64,7 +64,7 @@ DEFAULT_PROVIDERS = {
     "teamorouter": {
         "base_url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
-        "model": "google/gemini-3.5-flash-lite",
+        "model": "gemini-3.5-flash-lite",
     },
 }
 
@@ -73,15 +73,15 @@ USER_CFG = os.path.join(
 )
 
 PROVIDER = { 
-    "only": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"], 
-    "order": ["inference-net/fp8", "inference-net/us", "relace", "cloudflare"],
-    "allow_fallbacks": True,
+    "only": ["relace", "inference-net/fp8", "inference-net/us", "cloudflare"], 
+    "order": ["relace", "inference-net/fp8", "inference-net/us", "cloudflare"],
+    "allow_fallbacks": False,
     "require_parameters": True 
     }
 
 PROVIDER_FLEX = {
     "only": ["inference-net/fp8", "inference-net/us", "relace", "wafer/mxfp4", "cloudflare"],
-     "allow_fallbacks": True, 
+     "allow_fallbacks": False, 
      "sort": "throughput" 
     }
 
@@ -939,7 +939,12 @@ def process_ai_logic(user_text, client, generation=0, chips=None):
         # Отмена могла прийти, пока ждали план. Не выполняем sequence и не отвечаем в чат.
         exchange(client, {"action": "ping"}, generation)
 
-        use_provider("openrouter-flex")  # Возвращаемся к гибкому провайдеру для следующего запроса
+        use_provider("teamorouter")  # Возвращаемся к гибкому провайдеру для следующего запроса
+
+        headers = {
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json"
+            }
     
         # -----------------------------------------------------------------
         # ШАГ 4. СЦЕНАРИЙ А: ОТВЕТ БЕЗ ВЫЗОВА ФУНКЦИИ
